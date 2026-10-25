@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 
@@ -37,6 +38,18 @@ Site Site::fromJson(const QJsonObject &obj)
     s.templateText = obj.value(QStringLiteral("template")).toString();
     s.signature = obj.value(QStringLiteral("signature")).toString();
     s.tune = obj.value(QStringLiteral("tune")).toString();
+    if (obj.contains(QStringLiteral("headingLevel"))) {
+        const int level = obj.value(QStringLiteral("headingLevel")).toInt();
+        s.headingLevel = (level >= 1 && level <= 6) ? level : 2;
+    } else {
+        const int inferred = leadingHeadingLevel(s.templateText);
+        s.headingLevel = inferred == 0 ? 2 : inferred;
+    }
+    s.emphasis = obj.value(QStringLiteral("emphasis")).toString() == QLatin1String("__") ? QStringLiteral("__")
+                                                                                          : QStringLiteral("**");
+    const QString marker = obj.value(QStringLiteral("listMarker")).toString();
+    s.listMarker = (marker == QLatin1String("*") || marker == QLatin1String("+")) ? marker : QStringLiteral("-");
+    s.styleNotes = obj.value(QStringLiteral("style")).toString();
     s.imagePattern = obj.value(QStringLiteral("imagePattern")).toString(QStringLiteral("{stem}{ext}"));
     if (s.imagePattern.trimmed().isEmpty())
         s.imagePattern = QStringLiteral("{stem}{ext}");
@@ -45,6 +58,23 @@ Site Site::fromJson(const QJsonObject &obj)
         s.hasAutoFix = true;
     }
     s.frontMatter = obj.value(QStringLiteral("frontMatter")).toObject();
+    s.layout = obj.value(QStringLiteral("layout")).toString().trimmed();
+    if (s.layout.isEmpty())
+        s.layout = s.frontMatter.value(QStringLiteral("layout")).toString().trimmed();
+    for (const QJsonValue &v : obj.value(QStringLiteral("layouts")).toArray()) {
+        const QString name = v.toString().trimmed();
+        if (!name.isEmpty() && !s.layouts.contains(name))
+            s.layouts << name;
+    }
+    if (!s.layout.isEmpty() && !s.layouts.contains(s.layout))
+        s.layouts.prepend(s.layout);
+    for (const QJsonValue &v : obj.value(QStringLiteral("tags")).toArray()) {
+        const QString tag = v.toString().trimmed();
+        if (!tag.isEmpty() && !s.tags.contains(tag))
+            s.tags << tag;
+    }
+    if (!s.isMdx() && !s.layout.isEmpty())
+        s.frontMatter.insert(QStringLiteral("layout"), s.layout);
     const QJsonArray cols = obj.value(QStringLiteral("collections")).toArray();
     for (const QJsonValue &v : cols) {
         const QJsonObject o = v.toObject();
@@ -83,10 +113,31 @@ QJsonObject Site::toJson() const
         obj.insert(QStringLiteral("signature"), signature);
     if (!tune.trimmed().isEmpty())
         obj.insert(QStringLiteral("tune"), tune);
+    const int inferred = leadingHeadingLevel(templateText);
+    const int implied = inferred == 0 ? 2 : inferred;
+    if (headingLevel >= 1 && headingLevel <= 6 && headingLevel != implied)
+        obj.insert(QStringLiteral("headingLevel"), headingLevel);
+    if (emphasis == QLatin1String("__"))
+        obj.insert(QStringLiteral("emphasis"), emphasis);
+    if (listMarker == QLatin1String("*") || listMarker == QLatin1String("+"))
+        obj.insert(QStringLiteral("listMarker"), listMarker);
+    if (!styleNotes.trimmed().isEmpty())
+        obj.insert(QStringLiteral("style"), styleNotes.trimmed());
     if (!imagePattern.isEmpty())
         obj.insert(QStringLiteral("imagePattern"), imagePattern);
     if (hasAutoFix)
         obj.insert(QStringLiteral("autoFixLinks"), autoFixLinks);
+    if (!isMdx()) {
+        obj.insert(QStringLiteral("layout"), layout);
+        QJsonArray layoutArray;
+        for (const QString &name : layouts)
+            layoutArray.append(name);
+        obj.insert(QStringLiteral("layouts"), layoutArray);
+    }
+    QJsonArray tagArray;
+    for (const QString &tag : tags)
+        tagArray.append(tag);
+    obj.insert(QStringLiteral("tags"), tagArray);
     obj.insert(QStringLiteral("frontMatter"), frontMatter);
     QJsonArray cols;
     for (const Collection &c : collections) {
@@ -101,6 +152,61 @@ QJsonObject Site::toJson() const
     }
     obj.insert(QStringLiteral("collections"), cols);
     return obj;
+}
+
+int Site::leadingHeadingLevel(const QString &templateText)
+{
+    static const QRegularExpression heading(QStringLiteral("^(#{1,6})\\s"));
+    const QRegularExpressionMatch match = heading.match(templateText);
+    return match.hasMatch() ? match.captured(1).size() : 0;
+}
+
+bool Site::isStockHeadingTemplate(const QString &templateText)
+{
+    const QString text = templateText.trimmed();
+    if (text.isEmpty())
+        return true;
+    static const QRegularExpression stock(QStringLiteral("^#{1,6} \\{title\\}$"));
+    return stock.match(text).hasMatch();
+}
+
+QString Site::headingTemplate() const
+{
+    const int level = qBound(1, headingLevel, 6);
+    return QString(level, QLatin1Char('#')) + QStringLiteral(" {title}\n\n");
+}
+
+QString Site::writingGuide() const
+{
+    const int level = qBound(1, headingLevel, 6);
+    const QString marks(level, QLatin1Char('#'));
+    QStringList lines;
+    lines << QStringLiteral("Markdown style for this site. Follow it when you write or rewrite.");
+    if (level == 1) {
+        lines << QStringLiteral(
+            "Sections use heading 1 (#). The title is already in the front matter, so do not add a second title heading unless the draft already has one.");
+    } else {
+        lines << QStringLiteral(
+                     "The title stays in the front matter. Do not put a heading 1 in the body. Sections start at heading %1 (%2). A subsection adds one more #.")
+                     .arg(level)
+                     .arg(marks);
+    }
+    if (emphasis == QLatin1String("__"))
+        lines << QStringLiteral("Bold and italic use underscores: __bold__ and _italic_.");
+    else
+        lines << QStringLiteral("Bold and italic use asterisks: **bold** and *italic*.");
+    if (listMarker == QLatin1String("*"))
+        lines << QStringLiteral("Bullets use an asterisk: * item.");
+    else if (listMarker == QLatin1String("+"))
+        lines << QStringLiteral("Bullets use a plus: + item.");
+    else
+        lines << QStringLiteral("Bullets use a hyphen: - item.");
+    const QString notes = styleNotes.trimmed();
+    if (!notes.isEmpty())
+        lines << QStringLiteral("Also follow this: %1").arg(notes);
+    if (!signature.trimmed().isEmpty())
+        lines << QStringLiteral("Do not write a signature or a sign-off. Publish adds one.");
+    return lines.join(QLatin1Char('\n'));
 }
 
 QString Config::expandHome(const QString &path)

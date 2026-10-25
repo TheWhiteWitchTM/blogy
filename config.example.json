@@ -27,20 +27,25 @@
             "url": "https://thewhitewitchtm.github.io/whitewitch",
             "slugSeparator": "-",
             "commitMessage": "Post: {title}",
+            "layout": "default",
+            "layouts": ["default", "home"],
+            "tags": ["meta", "tech", "videos", "politics", "shorts", "autism", "history", "inflation", "personal", "russia", "site", "us", "about", "army", "blame", "columbus", "crime", "games", "gas", "humor", "prices", "rants", "satire", "science", "tools", "trump", "ukraine"],
             "collections": [
-                { "name": "blog",     "dir": "collections/_blog",     "file": "{date}-{slug}.md", "url": "/blog/{date}-{slug}.html" },
-                { "name": "articles", "dir": "collections/_articles", "file": "{date}-{slug}.md", "url": "/articles/{date}-{slug}.html" },
+                { "name": "blog",     "dir": "collections/_blog",     "file": "{date}-{slug}.md", "url": "/blog/{date}-{slug}.html",
+                  "frontMatter": { "featured": false } },
+                { "name": "articles", "dir": "collections/_articles", "file": "{date}-{slug}.md", "url": "/articles/{date}-{slug}.html",
+                  "frontMatter": { "highlight": false } },
                 { "name": "shorts",   "dir": "collections/_shorts",   "file": "{date}-{slug}.md", "url": "/shorts/{date}-{slug}.html" },
                 { "name": "rants",    "dir": "collections/_rants",    "file": "{date}-{slug}.md", "url": "/rants/{date}-{slug}.html" },
                 { "name": "videos",   "dir": "collections/_videos",   "file": "{date}-{slug}.md", "url": "/videos/{date}-{slug}.html",
                   "frontMatter": { "video": "" } },
-                { "name": "about",    "dir": "collections/_about",    "file": "{date}-{slug}.md", "url": "/about/{date}-{slug}.html" }
+                { "name": "about",    "dir": "collections/_about",    "file": "{date}-{slug}.md", "url": "/about/{date}-{slug}.html",
+                  "frontMatter": { "featured": false } }
             ],
             "frontMatter": {
                 "layout": "default",
                 "title": "",
                 "date": "{date}",
-                "featured": false,
                 "description": "",
                 "tags": []
             },
@@ -56,14 +61,18 @@
             "url": "https://thewhitewitchtm.github.io/mira",
             "slugSeparator": "_",
             "commitMessage": "Blog: {title}",
+            "tags": ["health", "nutrition"],
             "collections": [
-                { "name": "dev-blog",    "dir": "blog/dev-blog",    "file": "{slug}/page.mdx", "url": "/blog/dev-blog/{slug}" },
                 { "name": "ai_talk",     "dir": "blog/ai_talk",     "file": "{slug}/page.mdx", "url": "/blog/ai_talk/{slug}" },
+                { "name": "dev-blog",    "dir": "blog/dev-blog",    "file": "{slug}/page.mdx", "url": "/blog/dev-blog/{slug}" },
+                { "name": "emoji-ui",    "dir": "blog/emoji-ui",    "file": "{slug}/page.mdx", "url": "/blog/emoji-ui/{slug}" },
                 { "name": "miras_world", "dir": "blog/miras_world", "file": "{slug}/page.mdx", "url": "/blog/miras_world/{slug}" },
-                { "name": "emoji-ui",    "dir": "blog/emoji-ui",    "file": "{slug}/page.mdx", "url": "/blog/emoji-ui/{slug}" }
+                { "name": "next-blog",   "dir": "blog/next-blog",   "file": "{slug}/page.mdx", "url": "/blog/next-blog/{slug}" },
+                { "name": "next-static", "dir": "blog/next-static", "file": "{slug}/page.mdx", "url": "/blog/next-static/{slug}" }
             ],
             "frontMatter": {
-                "title": ""
+                "title": "",
+                "description": ""
             },
             "template": "#### {title}\n\n",
             "tune": "dark humor and sarcasm"
@@ -77,6 +86,9 @@
             "url": "https://thewhitewitchtm.github.io",
             "slugSeparator": "-",
             "commitMessage": "Post: {title}",
+            "layout": "default",
+            "layouts": ["default", "home"],
+            "tags": [],
             "collections": [
                 { "name": "posts", "dir": "_posts", "file": "{date}-{slug}.md", "url": "/{year}/{month}/{day}/{slug}.html" }
             ],

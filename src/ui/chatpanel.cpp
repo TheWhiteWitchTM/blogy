@@ -24,7 +24,9 @@ const char *kSystem =
     "You are the writing assistant inside Blogy, a Markdown editor for GitHub Pages blogs. "
     "Answer in Markdown. When asked to rewrite or produce content for the editor, reply with only that content: "
     "no preamble, no commentary, no code fences. Do not use tools or search. "
-    "If a site voice is given, write in that voice. Otherwise keep the author's voice: direct, dry, facts first.";
+    "If a site voice is given, write in that voice. Otherwise keep the author's voice: direct, dry, facts first. "
+    "Follow the Markdown style given for the site: heading level, emphasis, lists, and any extra notes. "
+    "Do not add a signature or a sign-off.";
 
 void allowShrink(QWidget *widget)
 {
@@ -64,6 +66,14 @@ private:
 
 } // namespace
 
+QString ChatPanel::withNote(const QString &prompt, const QString &note)
+{
+    const QString extra = note.trimmed();
+    if (extra.isEmpty())
+        return prompt;
+    return prompt + QStringLiteral("\n\nThe author added this instruction. Follow it:\n") + extra;
+}
+
 ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWidget *parent)
     : QWidget(parent), config_(config), grok_(grok), editor_(editor)
 {
@@ -84,24 +94,31 @@ ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWi
     auto *front = new QPushButton(QStringLiteral("Front matter"), this);
     auto *title = new QPushButton(QStringLiteral("Title + tags"), this);
     auto *bsky = new QPushButton(QStringLiteral("Bluesky blurb"), this);
-    for (QPushButton *button : {write, polish, front, title, bsky})
+    sendButton_ = new QPushButton(QStringLiteral("Ask"), this);
+    sendButton_->setObjectName(QStringLiteral("primary"));
+    for (QPushButton *button : {write, polish, front, title, bsky, sendButton_}) {
         allowShrink(button);
-    write->setToolTip(QStringLiteral("Turns the outline in the editor into the full post, in this site's voice. The box below can change it. Leave the box empty to write from what is already there."));
-    polish->setToolTip(QStringLiteral("Rewrite the selected text (or the whole post) and keep your voice."));
-    front->setToolTip(QStringLiteral("Write front matter for this post that fits the site."));
-    title->setToolTip(QStringLiteral("Suggest titles and tags."));
-    bsky->setToolTip(QStringLiteral("A post under 300 characters announcing this article."));
+        button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        jobs_.append(button);
+    }
+    write->setToolTip(QStringLiteral("Turns the outline into the full post, in this site's voice. Text in the box is part of that. Leave the box empty to write from what is already there."));
+    polish->setToolTip(QStringLiteral("Rewrite the selected text, or the whole post. Text in the box is part of the rewrite."));
+    front->setToolTip(QStringLiteral("Write front matter that fits this site. Text in the box is included."));
+    title->setToolTip(QStringLiteral("Suggest titles and tags this site already uses. Text in the box is included."));
+    bsky->setToolTip(QStringLiteral("A post under 300 characters. Text in the box is included."));
+    sendButton_->setToolTip(QStringLiteral("Send whatever you typed. Ctrl+Enter does this too."));
     grid->addWidget(write, 0, 0, 1, 2);
     grid->addWidget(polish, 1, 0);
     grid->addWidget(front, 1, 1);
     grid->addWidget(title, 2, 0);
     grid->addWidget(bsky, 2, 1);
+    grid->addWidget(sendButton_, 3, 0, 1, 2);
     v->addLayout(grid);
 
     log_ = new QTextBrowser(this);
     log_->setObjectName(QStringLiteral("chatLog"));
     log_->setOpenExternalLinks(true);
-    log_->setMinimumHeight(16);
+    log_->setMinimumHeight(0);
     log_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     v->addWidget(log_, 1);
 
@@ -109,6 +126,8 @@ ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWi
     status_->setObjectName(QStringLiteral("muted"));
     status_->setWordWrap(true);
     status_->setMinimumWidth(0);
+    status_->setMinimumHeight(0);
+    status_->setMaximumHeight(status_->fontMetrics().lineSpacing() * 2 + 6);
     v->addWidget(status_);
 
     live_ = new QPlainTextEdit(this);
@@ -128,12 +147,12 @@ ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWi
 
     input_ = new QPlainTextEdit(this);
     input_->setObjectName(QStringLiteral("chatPrompt"));
-    input_->setPlaceholderText(QStringLiteral("How to change the draft. Empty finishes what is already in the editor. Ctrl+Enter sends."));
+    input_->setPlaceholderText(QStringLiteral("Ask anything, or a note for Finish, Polish, and the other buttons. Ctrl+Enter asks."));
     input_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-    // Short windows still have to show the box. Extra height goes here, not to the log.
-    input_->setMinimumHeight(108);
+    // The box grows when the pane is tall. On a short window it shrinks so Ask stays on screen.
+    input_->setMinimumHeight(72);
     input_->setMinimumWidth(0);
-    input_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    input_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
     input_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     input_->document()->setDocumentMargin(2);
     QFont promptFont = input_->font();
@@ -141,20 +160,15 @@ ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWi
     input_->setFont(promptFont);
     v->addWidget(input_, 2);
 
-    auto *clear = new QPushButton(QStringLiteral("Clear"), this);
+    clearButton_ = new QPushButton(QStringLiteral("Clear"), this);
     applyButton_ = new QPushButton(QStringLiteral("Apply to editor"), this);
     applyButton_->setEnabled(false);
-    clear->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    clearButton_->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     allowShrink(applyButton_);
-    sendButton_ = new QPushButton(QStringLiteral("Send"), this);
-    sendButton_->setObjectName(QStringLiteral("primary"));
-    sendButton_->setMinimumWidth(112);
-    sendButton_->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     auto *applyRow = new QHBoxLayout;
     applyRow->setSpacing(6);
-    applyRow->addWidget(clear);
+    applyRow->addWidget(clearButton_);
     applyRow->addWidget(applyButton_, 1);
-    applyRow->addWidget(sendButton_);
     v->addLayout(applyRow);
     input_->installEventFilter(new SendOnCtrlEnter(sendButton_, this));
 
@@ -164,16 +178,25 @@ ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWi
     connect(title, &QPushButton::clicked, this, &ChatPanel::suggestTitleTags);
     connect(bsky, &QPushButton::clicked, this, &ChatPanel::blueskySummary);
     connect(applyButton_, &QPushButton::clicked, this, &ChatPanel::applyLast);
-    connect(clear, &QPushButton::clicked, this, [this] {
+    connect(clearButton_, &QPushButton::clicked, this, [this] {
         history_ = QJsonArray();
         log_->clear();
         last_.clear();
         applyButton_->setEnabled(false);
     });
     connect(sendButton_, &QPushButton::clicked, this, [this] {
-        const QString text = input_->toPlainText().trimmed();
-        if (text.isEmpty())
+        if (grok_->busy()) {
+            status_->setText(QStringLiteral("Still waiting on the last answer."));
+            emit activity(status_->text());
             return;
+        }
+        const QString text = input_->toPlainText().trimmed();
+        if (text.isEmpty()) {
+            status_->setText(QStringLiteral("Type what you want, then press Ask."));
+            emit activity(status_->text());
+            input_->setFocus();
+            return;
+        }
         input_->clear();
         lastWasBluesky_ = false;
         const Apply mode = applyModeForPrompt(text);
@@ -227,7 +250,7 @@ ChatPanel::ChatPanel(Config *config, GrokClient *grok, MarkdownEdit *editor, QWi
     else {
         const QString source = config_->secretSource(QStringLiteral("grok"));
         status_->setText(source == QLatin1String("missing")
-                             ? QStringLiteral("No Grok CLI sign-in and no xAI key. Install Grok, or add a key in Settings.")
+                             ? QStringLiteral("Grok is not signed in. Install Grok, then run grok login.")
                              : QStringLiteral("Model %1, key from %2.").arg(config_->grokModelResolved(), source));
     }
 }
@@ -336,12 +359,30 @@ void ChatPanel::onTick()
     emit activity(line);
 }
 
+void ChatPanel::setWorking(bool on)
+{
+    for (QPushButton *button : jobs_)
+        button->setEnabled(!on);
+    if (clearButton_)
+        clearButton_->setEnabled(!on);
+    if (applyButton_)
+        applyButton_->setEnabled(!on && !last_.isEmpty());
+}
+
+QString ChatPanel::takeNote()
+{
+    const QString note = input_->toPlainText().trimmed();
+    if (!note.isEmpty())
+        input_->clear();
+    return note;
+}
+
 void ChatPanel::finishRequest(bool restoreEditor)
 {
     tick_->stop();
     draftDirty_ = false;
     live_->hide();
-    sendButton_->setEnabled(true);
+    setWorking(false);
     if (restoreEditor && streamedIntoEditor_)
         editor_->undo();
     streamedIntoEditor_ = false;
@@ -372,7 +413,7 @@ void ChatPanel::send(const QString &prompt, Apply mode, bool includePost, const 
     elapsed_.restart();
     tick_->start();
     onTick();
-    sendButton_->setEnabled(false);
+    setWorking(true);
     GrokClient::Request request;
     request.useCli = config_->grokUsesCli();
     request.command = config_->grokCommandResolved();
@@ -385,29 +426,55 @@ void ChatPanel::send(const QString &prompt, Apply mode, bool includePost, const 
 
 void ChatPanel::polishSelection()
 {
+    if (grok_->busy()) {
+        status_->setText(QStringLiteral("Still waiting on the last answer."));
+        emit activity(status_->text());
+        return;
+    }
     lastWasBluesky_ = false;
+    const QString note = takeNote();
     const bool hasSel = editor_->textCursor().hasSelection();
     const QString text = editor_->selectedOrAll();
-    send(QStringLiteral("Polish this %1. Fix grammar, tighten wording, keep the voice and the Markdown. "
-                        "Reply with only the rewritten text.\n\n%2")
-             .arg(hasSel ? QStringLiteral("passage") : QStringLiteral("post (front matter included, keep it valid)"), text),
-         Apply::Selection, false);
+    const QString prompt = withNote(QStringLiteral("Polish this %1. Fix grammar, tighten wording, keep the voice, and follow the site's Markdown style. "
+                                                   "Reply with only the rewritten text.\n\n%2")
+                                        .arg(hasSel ? QStringLiteral("passage")
+                                                    : QStringLiteral("post (front matter included, keep it valid)"),
+                                             text),
+                                    note);
+    send(prompt, Apply::Selection, false, note.isEmpty() ? QString() : QStringLiteral("Polish. ") + note);
 }
 
 void ChatPanel::generateFrontMatter()
 {
+    if (grok_->busy()) {
+        status_->setText(QStringLiteral("Still waiting on the last answer."));
+        emit activity(status_->text());
+        return;
+    }
     lastWasBluesky_ = false;
-    send(QStringLiteral("Write the front matter for this post. Keep existing keys and the same format "
-                        "(YAML for Jekyll, or the MDX metadata keys). Fill title, description (one sentence, "
-                        "under 160 characters) and tags (3-5, lowercase). Reply with only `key: value` lines, "
-                        "no --- fences, lists as [a, b]."),
-         Apply::FrontMatter, true);
+    const QString note = takeNote();
+    send(withNote(QStringLiteral("Write the front matter for this post. Keep existing keys and the same format "
+                                 "(YAML for Jekyll, or the MDX metadata keys). Use this site's layout. "
+                                 "Fill title, description (one sentence, under 160 characters) and tags "
+                                 "(3-5, lowercase, preferring tags this site already uses). "
+                                 "Reply with only `key: value` lines, no --- fences, lists as [a, b]."),
+                  note),
+         Apply::FrontMatter, true, note.isEmpty() ? QStringLiteral("Front matter.") : QStringLiteral("Front matter. ") + note);
 }
 
 void ChatPanel::suggestTitleTags()
 {
+    if (grok_->busy()) {
+        status_->setText(QStringLiteral("Still waiting on the last answer."));
+        emit activity(status_->text());
+        return;
+    }
     lastWasBluesky_ = false;
-    send(QStringLiteral("Suggest five titles and five tags for this post. Short list, best first."), Apply::Insert, true);
+    const QString note = takeNote();
+    send(withNote(QStringLiteral("Suggest five titles and five tags for this post. Prefer tags this site already uses. "
+                                 "Short list, best first."),
+                  note),
+         Apply::Insert, true, note.isEmpty() ? QStringLiteral("Title and tags.") : QStringLiteral("Title and tags. ") + note);
 }
 
 void ChatPanel::writePost()
@@ -418,14 +485,13 @@ void ChatPanel::writePost()
         emit activity(status_->text());
         return;
     }
-    const QString brief = input_->toPlainText().trimmed();
+    const QString brief = takeNote();
     if (brief.isEmpty() && editor_->toPlainText().trimmed().isEmpty()) {
         status_->setText(QStringLiteral("Dictate an outline first, or type what the post should be."));
         emit activity(status_->text());
         input_->setFocus();
         return;
     }
-    input_->clear();
     QString prompt = QStringLiteral(
         "The text below is the draft already in the editor. It may be an outline, dictation, or a post in progress. "
         "Turn it into one finished Markdown file. "
@@ -435,6 +501,8 @@ void ChatPanel::writePost()
         "(YAML between --- lines for Jekyll, or `export const metadata = { ... };` for MDX). "
         "Keep the existing title, date, tags, and description when they are already filled in. "
         "Write in the site's voice. "
+        "Follow the Markdown style given for this site: the heading level, emphasis, lists, and notes. "
+        "Do not add a signature. "
         "Reply with only the file contents. No preamble and no code fence around the file.");
     if (!brief.isEmpty())
         prompt += QStringLiteral("\n\nChange it like this:\n") + brief;
@@ -450,7 +518,13 @@ void ChatPanel::focusInput()
 
 void ChatPanel::blueskySummary()
 {
+    if (grok_->busy()) {
+        status_->setText(QStringLiteral("Still waiting on the last answer."));
+        emit activity(status_->text());
+        return;
+    }
     lastWasBluesky_ = true;
+    const QString note = takeNote();
     const QString url = postUrl ? postUrl() : QString();
     QString prompt = QStringLiteral(
         "Write a Bluesky post. Start with a short excerpt of the article, one or two sentences in the site's voice, "
@@ -460,7 +534,8 @@ void ChatPanel::blueskySummary()
         prompt += QStringLiteral("\n\nUse this exact URL:\n") + url;
     else
         prompt += QStringLiteral("\n\nThe public URL is not known yet. Write the excerpt only.");
-    send(prompt, Apply::Insert, true);
+    send(withNote(prompt, note), Apply::Insert, true,
+         note.isEmpty() ? QStringLiteral("Bluesky blurb.") : QStringLiteral("Bluesky blurb. ") + note);
 }
 
 void ChatPanel::applyLast()

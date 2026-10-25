@@ -20,6 +20,15 @@ PublishPanel::PublishPanel(QWidget *parent)
     layout->setContentsMargins(10, 8, 10, 8);
     layout->setSpacing(6);
 
+    // The commit button stays at the top. A short window used to push it below the pane.
+    button_ = new QPushButton(QStringLiteral("Publish"), this);
+    button_->setObjectName(QStringLiteral("primary"));
+    button_->setEnabled(false);
+    button_->setMinimumWidth(0);
+    button_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    button_->setToolTip(QStringLiteral("Save this post, commit it, and push it to the site repo."));
+    layout->addWidget(button_);
+
     summary_ = new QPlainTextEdit(this);
     summary_->setObjectName(QStringLiteral("publishSummary"));
     summary_->setReadOnly(true);
@@ -31,10 +40,9 @@ PublishPanel::PublishPanel(QWidget *parent)
     summary_->setMinimumWidth(0);
     summary_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     summary_->document()->setDocumentMargin(0);
-    // Site, repo, branch, and path. Anything longer scrolls inside this block.
     const int summaryLine = summary_->fontMetrics().lineSpacing();
-    summary_->setMinimumHeight(summaryLine * 2 + 4);
-    summary_->setMaximumHeight(summaryLine * 5);
+    summary_->setMinimumHeight(0);
+    summary_->setMaximumHeight(summaryLine * 3 + 4);
     layout->addWidget(summary_);
 
     auto *messageLabel = new QLabel(QStringLiteral("Commit message"), this);
@@ -46,13 +54,6 @@ PublishPanel::PublishPanel(QWidget *parent)
     message_->setMinimumWidth(0);
     message_->setTextMargins(4, 0, 4, 0);
     layout->addWidget(message_);
-
-    button_ = new QPushButton(QStringLiteral("Publish"), this);
-    button_->setObjectName(QStringLiteral("primary"));
-    button_->setEnabled(false);
-    button_->setMinimumWidth(0);
-    button_->setToolTip(QStringLiteral("Save this post, commit it, and push it to the site repo."));
-    layout->addWidget(button_);
 
     auto *commandLabel = new QLabel(QStringLiteral("Command"), this);
     commandLabel->setObjectName(QStringLiteral("section"));
@@ -67,15 +68,16 @@ PublishPanel::PublishPanel(QWidget *parent)
     const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     command_->setFont(mono);
     const int commandLine = command_->fontMetrics().lineSpacing();
-    command_->setFixedHeight(commandLine * 3 + 12);
-    command_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    command_->setMinimumHeight(0);
+    command_->setMaximumHeight(commandLine * 3 + 12);
+    command_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     layout->addWidget(command_);
 
     log_ = new QPlainTextEdit(this);
     log_->setObjectName(QStringLiteral("gitLog"));
     log_->setReadOnly(true);
     log_->setFont(mono);
-    log_->setMinimumHeight(commandLine);
+    log_->setMinimumHeight(0);
     log_->setMinimumWidth(0);
     log_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     log_->setPlaceholderText(QStringLiteral("git output shows up here when you publish."));

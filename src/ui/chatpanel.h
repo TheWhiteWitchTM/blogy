@@ -2,6 +2,7 @@
 
 #include <QElapsedTimer>
 #include <QJsonArray>
+#include <QList>
 #include <QWidget>
 #include <functional>
 
@@ -40,6 +41,8 @@ public:
     static Apply applyModeForPrompt(const QString &text);
     // A finished Markdown file: front matter plus a body.
     static bool looksLikeWholePost(const QString &text);
+    // A note typed in the box is part of Finish, Polish, and the other jobs.
+    static QString withNote(const QString &prompt, const QString &note);
 
 signals:
     void blueskyTextReady(const QString &text);
@@ -53,6 +56,8 @@ private:
     void onTick();
     void applyDraft(const QString &text);
     void finishRequest(bool restoreEditor);
+    void setWorking(bool on);
+    QString takeNote();
     QString progressLine() const;
     static QString stripFences(const QString &text);
 
@@ -63,6 +68,8 @@ private:
     QPlainTextEdit *input_ = nullptr;
     QPushButton *sendButton_ = nullptr;
     QPushButton *applyButton_ = nullptr;
+    QPushButton *clearButton_ = nullptr;
+    QList<QPushButton *> jobs_;
     QLabel *status_ = nullptr;
     QPlainTextEdit *live_ = nullptr;
     QTimer *tick_ = nullptr;

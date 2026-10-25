@@ -23,7 +23,9 @@
 #include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QLabel>
+#include <QLineEdit>
 #include <QEventLoop>
 #include <QListWidget>
 #include <QMenu>
@@ -123,6 +125,11 @@ int runSelfTest()
     check(dev && post::parsePath(*dev, QStringLiteral("blog/dev-blog/nextjs_vs_php/page.mdx"), &pd, &ps)
               && ps == QLatin1String("nextjs_vs_php"),
           "mdx parse path");
+    check(ww.headingLevel == 2 && ww.writingGuide().contains(QLatin1String("heading 2"))
+              && ww.writingGuide().contains(QLatin1String("##")),
+          "example site starts sections at heading 2", ww.writingGuide());
+    check(mira.headingLevel == 4 && mira.writingGuide().contains(QLatin1String("heading 4")),
+          "mdx example starts at heading 4", mira.writingGuide());
 
     // GitHub Pages' default Jekyll engine: files in _posts need a date prefix.
     Collection posts;
@@ -160,6 +167,44 @@ int runSelfTest()
     const Site signedBack = Site::fromJson(signedSite.toJson());
     check(signedBack.signature == signedSite.signature, "signature round trip");
     check(signedBack.tune == signedSite.tune, "tune round trip");
+    check(signedBack.layout == signedSite.layout && signedBack.layouts == signedSite.layouts && signedBack.tags == signedSite.tags,
+          "layout and tags round trip", signedBack.layout + QLatin1Char(' ') + signedBack.tags.join(QLatin1Char(',')));
+    Site styled = ww;
+    styled.headingLevel = 3;
+    styled.emphasis = QStringLiteral("__");
+    styled.listMarker = QStringLiteral("*");
+    styled.styleNotes = QStringLiteral("short paragraphs");
+    styled.signature = QStringLiteral("— Mira");
+    const QString guide = styled.writingGuide();
+    check(guide.contains(QLatin1String("heading 3")) && guide.contains(QLatin1String("###"))
+              && guide.contains(QLatin1String("__bold__")) && guide.contains(QLatin1String("* item"))
+              && guide.contains(QLatin1String("short paragraphs")) && guide.contains(QLatin1String("signature")),
+          "writing guide tells Grok the markdown style", guide);
+    const Site styledBack = Site::fromJson(styled.toJson());
+    check(styledBack.headingLevel == 3 && styledBack.emphasis == QLatin1String("__")
+              && styledBack.listMarker == QLatin1String("*") && styledBack.styleNotes == styled.styleNotes,
+          "markdown style round trip");
+    QJsonObject rawHeading{{QStringLiteral("name"), QStringLiteral("M")},
+                           {QStringLiteral("template"), QStringLiteral("#### {title}\n\n")}};
+    const Site inferred = Site::fromJson(rawHeading);
+    check(inferred.headingLevel == 4, "heading follows a stock template", QString::number(inferred.headingLevel));
+    check(Site::fromJson(inferred.toJson()).headingLevel == 4, "inferred heading survives a save");
+    rawHeading.insert(QStringLiteral("headingLevel"), 2);
+    check(Site::fromJson(rawHeading).headingLevel == 2, "explicit heading wins over the template");
+    Site headed;
+    headed.type = QStringLiteral("jekyll");
+    headed.headingLevel = 3;
+    headed.templateText = QStringLiteral("## {title}\n\n");
+    Collection postsCol;
+    postsCol.name = QStringLiteral("posts");
+    postsCol.dir = QStringLiteral("_posts");
+    postsCol.filePattern = QStringLiteral("{date}-{slug}.md");
+    const QString headedPost = post::newPostText(headed, postsCol, QStringLiteral("Hello"), QDate(2026, 10, 25));
+    check(headedPost.contains(QStringLiteral("### Hello")), "new post uses the markdown heading", headedPost);
+    headed.templateText = QStringLiteral("Intro {title}\n");
+    const QString customPost = post::newPostText(headed, postsCol, QStringLiteral("Hello"), QDate(2026, 10, 25));
+    check(customPost.contains(QStringLiteral("Intro Hello")) && !customPost.contains(QStringLiteral("### Hello")),
+          "a custom template keeps its own heading", customPost);
 
     // Front matter.
     const QString sample = QStringLiteral("---\nlayout: default\ntitle: \"A \\\"quoted\\\" title\"\ndate: 2026-10-10\n"
@@ -272,6 +317,10 @@ int runSelfTest()
     check(ChatPanel::looksLikeWholePost(QStringLiteral("---\ntitle: T\n---\n\nHello from the editor.\n")),
           "a file with front matter is the post");
     check(!ChatPanel::looksLikeWholePost(QStringLiteral("Here are five titles.")), "a list is not the post");
+    check(ChatPanel::withNote(QStringLiteral("Polish this."), QString()) == QLatin1String("Polish this."), "empty note stays out");
+    check(ChatPanel::withNote(QStringLiteral("Polish this."), QStringLiteral("shorter")).contains(QLatin1String("shorter"))
+              && ChatPanel::withNote(QStringLiteral("Polish this."), QStringLiteral("shorter")).startsWith(QLatin1String("Polish this.")),
+          "a note is part of the job");
 
     // The window, on a fake site.
     const QString root = tmp.filePath(QStringLiteral("site"));
@@ -295,8 +344,104 @@ int runSelfTest()
         check(window.openFile(file), "open post");
         {
             SettingsDialog settings(&winConfig, &window);
+            settings.resize(960, 720);
+            settings.show();
+            QApplication::processEvents();
             auto *tune = settings.findChild<QPlainTextEdit *>(QStringLiteral("siteTune"));
             check(tune && tune->placeholderText().contains(QLatin1String("sarcasm")), "site tune field");
+            auto *tabs = settings.findChild<QTabWidget *>(QStringLiteral("settingsTabs"));
+            QStringList titles;
+            if (tabs) {
+                for (int i = 0; i < tabs->count(); ++i)
+                    titles << tabs->tabText(i);
+            }
+            check(titles == QStringList({QStringLiteral("Sites"), QStringLiteral("Markdown"), QStringLiteral("AI"),
+                                         QStringLiteral("Bluesky"), QStringLiteral("Editor")}),
+                  "settings tabs are split", titles.join(QLatin1Char(',')));
+            auto onPage = [](QWidget *widget, QWidget *page) {
+                for (QWidget *at = widget; at; at = at->parentWidget()) {
+                    if (at == page)
+                        return true;
+                }
+                return false;
+            };
+            const int sitesTab = titles.indexOf(QStringLiteral("Sites"));
+            const int markdownTab = titles.indexOf(QStringLiteral("Markdown"));
+            const int aiTab = titles.indexOf(QStringLiteral("AI"));
+            const int bskyTab = titles.indexOf(QStringLiteral("Bluesky"));
+            auto *hint = settings.findChild<QLabel *>(QStringLiteral("layoutHint"));
+            auto *sig = settings.findChild<QPlainTextEdit *>(QStringLiteral("siteSignature"));
+            auto *heading = settings.findChild<QComboBox *>(QStringLiteral("markdownHeading"));
+            auto *handle = settings.findChild<QLineEdit *>(QStringLiteral("bskyHandle"));
+            const int hintNeed = hint ? hint->heightForWidth(qMax(hint->width(), 1)) : 0;
+            check(hint && tabs && onPage(hint, tabs->widget(sitesTab)) && hint->isVisible()
+                      && hint->width() >= 360 && hint->height() >= hint->fontMetrics().lineSpacing() * 2
+                      && hint->height() + 1 >= hintNeed,
+                  "layout hint is readable",
+                  hint ? QString::number(hint->width()) + QLatin1Char('x') + QString::number(hint->height())
+                             + QStringLiteral(" need ") + QString::number(hintNeed)
+                       : QStringLiteral("missing"));
+            check(sig && heading && tabs && onPage(sig, tabs->widget(markdownTab))
+                      && onPage(heading, tabs->widget(markdownTab)) && heading->currentData().toInt() == 2
+                      && sig->placeholderText().contains(QLatin1String("Your name")),
+                  "signature and default heading live on Markdown");
+            check(tune && handle && tabs && onPage(tune, tabs->widget(aiTab)) && !onPage(tune, tabs->widget(sitesTab))
+                      && onPage(handle, tabs->widget(bskyTab)) && !onPage(handle, tabs->widget(aiTab)),
+                  "voice stays with AI and Bluesky has its own tab");
+            tabs->setCurrentIndex(aiTab);
+            QApplication::processEvents();
+            auto *grokStatus = settings.findChild<QLabel *>(QStringLiteral("grokStatus"));
+            const int statusNeed = grokStatus ? grokStatus->heightForWidth(qMax(grokStatus->width(), 1)) : 0;
+            check(grokStatus && grokStatus->isVisible() && grokStatus->width() >= 360
+                      && grokStatus->height() >= grokStatus->fontMetrics().lineSpacing() * 2
+                      && grokStatus->height() + 1 >= statusNeed
+                      && !grokStatus->text().contains(QLatin1String("API key"))
+                      && !grokStatus->text().contains(QLatin1String("endpoint"))
+                      && settings.findChild<QWidget *>(QStringLiteral("grokBackend")) == nullptr
+                      && settings.findChild<QWidget *>(QStringLiteral("grokKey")) == nullptr,
+                  "AI is the Grok CLI sign-in, and the status is readable",
+                  grokStatus ? QString::number(grokStatus->width()) + QLatin1Char('x') + QString::number(grokStatus->height())
+                                   + QStringLiteral(" need ") + QString::number(statusNeed) + QStringLiteral(" / ")
+                                   + grokStatus->text()
+                             : QStringLiteral("missing"));
+            if (winConfig.grokCliAvailable())
+                check(grokStatus && grokStatus->text().startsWith(QLatin1String("Signed in")),
+                      "this machine's Grok sign-in is detected");
+            QPushButton *saveButton = nullptr;
+            QPushButton *cancelButton = nullptr;
+            for (QPushButton *button : settings.findChildren<QPushButton *>()) {
+                if (button->text() == QLatin1String("Save"))
+                    saveButton = button;
+                else if (button->text() == QLatin1String("Cancel"))
+                    cancelButton = button;
+            }
+            auto *footer = settings.findChild<QWidget *>(QStringLiteral("settingsFooter"));
+            const QPoint saveAt = saveButton ? saveButton->mapTo(&settings, QPoint(0, 0)) : QPoint();
+            const QPoint cancelAt = cancelButton ? cancelButton->mapTo(&settings, QPoint(0, 0)) : QPoint();
+            const int saveRight = saveButton ? saveAt.x() + saveButton->width() : 0;
+            const int cancelRight = cancelButton ? cancelAt.x() + cancelButton->width() : 0;
+            check(footer && saveButton && cancelButton
+                      && saveButton->objectName() == QLatin1String("primary")
+                      && footer->width() >= settings.width() - 2
+                      && footer->geometry().bottom() >= settings.height() - 2
+                      && saveAt.x() >= 12 && saveAt.x() <= 24
+                      && cancelAt.x() >= saveRight && cancelAt.x() <= saveRight + 16
+                      && cancelRight < settings.width() / 2
+                      && saveAt.y() >= settings.height() - 72
+                      && saveButton->height() >= 36 && cancelButton->height() >= 36,
+                  "settings save and cancel sit in the left of the footer",
+                  QStringLiteral("save %1,%2 %3x%4 cancel %5,%6 footer %7x%8 dialog %9x%10")
+                      .arg(saveAt.x())
+                      .arg(saveAt.y())
+                      .arg(saveButton ? saveButton->width() : 0)
+                      .arg(saveButton ? saveButton->height() : 0)
+                      .arg(cancelAt.x())
+                      .arg(cancelAt.y())
+                      .arg(footer ? footer->width() : 0)
+                      .arg(footer ? footer->height() : 0)
+                      .arg(settings.width())
+                      .arg(settings.height()));
+            settings.hide();
         }
         QPushButton *writePost = nullptr;
         for (QPushButton *button : window.findChildren<QPushButton *>()) {
@@ -322,7 +467,7 @@ int runSelfTest()
                     frontHeading = true;
             }
         }
-        check(prompt && prompt->font().pointSize() >= 16 && prompt->minimumHeight() >= 96,
+        check(prompt && prompt->font().pointSize() >= 16 && prompt->minimumHeight() >= 72,
               "prompt is large enough to write in",
               prompt ? QString::number(prompt->font().pointSize()) + QStringLiteral("pt / ")
                           + QString::number(prompt->minimumHeight())
@@ -513,7 +658,7 @@ int runSelfTest()
             QPushButton *send = nullptr;
             QPushButton *clearChat = nullptr;
             for (QPushButton *button : window.findChildren<QPushButton *>()) {
-                if (button->text() == QLatin1String("Send"))
+                if (button->text() == QLatin1String("Ask"))
                     send = button;
                 if (button->text() == QLatin1String("Clear"))
                     clearChat = button;
@@ -530,11 +675,11 @@ int runSelfTest()
             };
             if (send && chat && prompt) {
                 const QRect inChat(send->mapTo(chat, QPoint(0, 0)), send->size());
-                check(send->width() >= 72 && chat->rect().contains(inChat), "send stays inside the chat pane",
+                check(send->width() >= 72 && chat->rect().contains(inChat), "ask stays inside the chat pane",
                       QString::number(inChat.x()) + QLatin1Char(',') + QString::number(inChat.right())
                           + QStringLiteral(" of ") + QString::number(chat->width()));
                 const QRect onWindow(send->mapTo(&window, QPoint(0, 0)), send->size());
-                check(window.rect().contains(onWindow), "send stays in the window",
+                check(window.rect().contains(onWindow), "ask stays in the window",
                       QString::number(onWindow.right()) + QStringLiteral(" of ") + QString::number(window.width()));
                 window.resize(1440, 900);
                 QApplication::processEvents();
@@ -549,8 +694,8 @@ int runSelfTest()
                 const QRect sendOnWindow(send->mapTo(&window, QPoint(0, 0)), send->size());
                 check(fullyInside(prompt, chat) && fullyInside(send, chat) && fullyInside(clearChat, chat)
                           && window.rect().contains(promptOnWindow) && window.rect().contains(sendOnWindow)
-                          && prompt->height() >= 96 && prompt->width() + 36 >= chat->width(),
-                      "prompt and send fit a short window",
+                          && prompt->height() >= 72 && prompt->width() + 36 >= chat->width(),
+                      "prompt and ask fit a short window",
                       QString::number(prompt->x()) + QLatin1Char(',') + QString::number(prompt->y())
                           + QLatin1Char(' ') + QString::number(prompt->width()) + QLatin1Char('x')
                           + QString::number(prompt->height()) + QStringLiteral(" send ")
@@ -776,8 +921,47 @@ int runSelfTest()
     const Site inspected = inspectBlog(detected, &isBlog);
     check(isBlog && inspected.name == QLatin1String("Demo Witch")
               && inspected.url == QLatin1String("https://example.github.io/demo") && inspected.collections.size() == 1
-              && inspected.collections.first().urlPattern == QLatin1String("/notes/{date}-{slug}.html"),
-          "inspect jekyll repo", inspected.url + QLatin1Char(' ') + inspected.collections.value(0).urlPattern);
+              && inspected.collections.first().urlPattern == QLatin1String("/notes/{date}-{slug}.html")
+              && inspected.layout == QLatin1String("default")
+              && inspected.frontMatter.value(QStringLiteral("layout")).toString() == QLatin1String("default"),
+          "inspect jekyll repo", inspected.url + QLatin1Char(' ') + inspected.layout + QLatin1Char(' ')
+                                      + inspected.collections.value(0).urlPattern);
+
+    const QString surveyed = tmp.filePath(QStringLiteral("surveyed"));
+    writeFile(surveyed + QStringLiteral("/_config.yml"),
+              QStringLiteral("title: Survey\nurl: \"https://example.github.io\"\nbaseurl: /survey\ndefaults:\n  - scope:\n      path: \"\"\n    values:\n      layout: post\n"));
+    writeFile(surveyed + QStringLiteral("/_layouts/default.html"), QStringLiteral("<html></html>\n"));
+    writeFile(surveyed + QStringLiteral("/_layouts/home.html"), QStringLiteral("<html></html>\n"));
+    writeFile(surveyed + QStringLiteral("/_layouts/post.html"), QStringLiteral("<html></html>\n"));
+    writeFile(surveyed + QStringLiteral("/index.md"), QStringLiteral("---\nlayout: home\ntitle: Home\n---\n\n"));
+    writeFile(surveyed + QStringLiteral("/collections/_notes/2026-01-02-one.md"),
+              QStringLiteral("---\nlayout: default\ntitle: One\ndate: 2026-01-02\ndescription: A\ntags: [tea, news]\nfeatured: true\n---\n\n"));
+    writeFile(surveyed + QStringLiteral("/collections/_notes/2026-01-03-two.md"),
+              QStringLiteral("---\nlayout: default\ntitle: Two\ndate: 2026-01-03\ndescription: B\ntags: [tea]\nfeatured: true\n---\n\n"));
+    writeFile(surveyed + QStringLiteral("/collections/_clips/2026-01-04-a.md"),
+              QStringLiteral("---\nlayout: default\ntitle: A\ndate: 2026-01-04\ndescription: C\ntags: [news]\nvideo: https://example\n---\n\n"));
+    writeFile(surveyed + QStringLiteral("/collections/_clips/2026-01-05-b.md"),
+              QStringLiteral("---\nlayout: default\ntitle: B\ndate: 2026-01-05\ndescription: D\ntags: [news]\nvideo: https://example/2\n---\n\n"));
+    const Site survey = inspectBlog(surveyed);
+    const Collection *clips = survey.collection(QStringLiteral("clips"));
+    check(survey.layout == QLatin1String("default") && survey.layouts.contains(QStringLiteral("default"))
+              && survey.layouts.contains(QStringLiteral("home")) && survey.layouts.contains(QStringLiteral("post"))
+              && survey.layouts.first() == QLatin1String("default")
+              && survey.tags == QStringList({QStringLiteral("news"), QStringLiteral("tea")})
+              && survey.frontMatter.value(QStringLiteral("layout")).toString() == QLatin1String("default")
+              && !survey.frontMatter.contains(QStringLiteral("featured")) && !survey.frontMatter.contains(QStringLiteral("video"))
+              && clips && clips->frontMatter.contains(QStringLiteral("video"))
+              && survey.collection(QStringLiteral("notes"))
+              && survey.collection(QStringLiteral("notes"))->frontMatter.contains(QStringLiteral("featured")),
+          "inspect stores the layout the posts use and the tags",
+          survey.layout + QLatin1Char(' ') + survey.tags.join(QLatin1Char(',')) + QLatin1Char(' ')
+              + survey.layouts.join(QLatin1Char(',')));
+
+    const QString plain = tmp.filePath(QStringLiteral("plain-pages"));
+    writeFile(plain + QStringLiteral("/_posts/2026-02-02-hi.md"), QStringLiteral("---\ntitle: Hi\n---\n\nHello\n"));
+    const Site plainSite = inspectBlog(plain);
+    check(plainSite.layout == QLatin1String("post") && plainSite.frontMatter.value(QStringLiteral("layout")).toString() == QLatin1String("post"),
+          "a pages blog with no layouts uses post", plainSite.layout);
 
     const QString shot = tmp.filePath(QStringLiteral("shot.png"));
     writeFile(shot, QStringLiteral("not really a png"));
@@ -874,11 +1058,13 @@ int runSelfTest()
 
     const QByteArray authJson = QByteArrayLiteral(
         "{\"https://auth.x.ai::abc\":{\"key\":\"test-token\",\"expires_at\":\"2026-10-25T17:41:25.789650608Z\","
-        "\"refresh_token\":\"r\",\"oidc_client_id\":\"c\",\"oidc_issuer\":\"https://auth.x.ai\"}}");
+        "\"refresh_token\":\"r\",\"oidc_client_id\":\"c\",\"oidc_issuer\":\"https://auth.x.ai\","
+        "\"email\":\"ada@example.com\",\"first_name\":\"Ada\"}}");
     GrokCliSession session;
     check(grokCliSessionFromAuth(authJson, &session) && session.accessToken == QLatin1String("test-token")
               && session.hasExpiry && session.expires.date() == QDate(2026, 10, 25)
-              && session.expires.time() == QTime(17, 41, 25, 789) && session.issuer == QLatin1String("https://auth.x.ai"),
+              && session.expires.time() == QTime(17, 41, 25, 789) && session.issuer == QLatin1String("https://auth.x.ai")
+              && session.email == QLatin1String("ada@example.com") && session.firstName == QLatin1String("Ada"),
           "grok auth token", session.accessToken + QLatin1Char(' ') + session.expires.toString(Qt::ISODateWithMs));
     check(!grokCliSessionFromAuth(QByteArrayLiteral("{\"other\":{}}"), &session), "grok auth without a token");
 

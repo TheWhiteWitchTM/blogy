@@ -54,7 +54,7 @@ QString expiryText(const QDateTime &dt)
 
 QString missingSignIn()
 {
-    return QStringLiteral("Dictation needs a Grok sign-in or an xAI key. Sign in with Grok, or add a key in Settings.");
+    return QStringLiteral("Dictation needs a Grok sign-in. Run grok login.");
 }
 
 bool writeSession(const GrokCliSession &session, const QByteArray &original, QString *error)
@@ -90,7 +90,7 @@ bool refreshSession(GrokCliSession *session, const QByteArray &original, QString
 {
     if (session->refreshToken.isEmpty() || session->clientId.isEmpty()) {
         if (error)
-            *error = QStringLiteral("The Grok sign-in has expired. Run grok login, or add an xAI key in Settings.");
+            *error = QStringLiteral("The Grok sign-in has expired. Run grok login.");
         return false;
     }
     QString base = session->issuer.trimmed().isEmpty() ? QStringLiteral("https://auth.x.ai") : session->issuer.trimmed();
@@ -115,7 +115,7 @@ bool refreshSession(GrokCliSession *session, const QByteArray &original, QString
         reply->abort();
         reply->deleteLater();
         if (error)
-            *error = QStringLiteral("The Grok sign-in could not be refreshed. Run grok login, or add an xAI key in Settings.");
+            *error = QStringLiteral("The Grok sign-in could not be refreshed. Run grok login.");
         return false;
     }
     const QByteArray body = reply->readAll();
@@ -127,8 +127,8 @@ bool refreshSession(GrokCliSession *session, const QByteArray &original, QString
         const QString reason = obj.value(QStringLiteral("error")).toString();
         if (error)
             *error = reason.isEmpty()
-                         ? QStringLiteral("The Grok sign-in could not be refreshed. Run grok login, or add an xAI key in Settings.")
-                         : QStringLiteral("The Grok sign-in could not be refreshed (%1). Run grok login, or add an xAI key in Settings.").arg(reason);
+                         ? QStringLiteral("The Grok sign-in could not be refreshed. Run grok login.")
+                         : QStringLiteral("The Grok sign-in could not be refreshed (%1). Run grok login.").arg(reason);
         return false;
     }
     session->accessToken = access;
@@ -162,6 +162,8 @@ bool grokCliSessionFromAuth(const QByteArray &json, GrokCliSession *session)
         session->refreshToken = obj.value(QStringLiteral("refresh_token")).toString();
         session->clientId = obj.value(QStringLiteral("oidc_client_id")).toString();
         session->issuer = obj.value(QStringLiteral("oidc_issuer")).toString();
+        session->email = obj.value(QStringLiteral("email")).toString().trimmed();
+        session->firstName = obj.value(QStringLiteral("first_name")).toString().trimmed();
         const QString exp = obj.value(QStringLiteral("expires_at")).toString();
         if (!exp.isEmpty()) {
             session->expires = parseExpiry(exp);
@@ -170,6 +172,14 @@ bool grokCliSessionFromAuth(const QByteArray &json, GrokCliSession *session)
         return true;
     }
     return false;
+}
+
+bool grokCliLocalSession(GrokCliSession *session)
+{
+    QFile file(authPath());
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    return grokCliSessionFromAuth(file.readAll(), session);
 }
 
 QString grokBearerToken(const Config &config, QString *error)

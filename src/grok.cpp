@@ -194,7 +194,7 @@ void GrokClient::chat(const Request &request)
 void GrokClient::startCli(const Request &request)
 {
     if (request.command.isEmpty()) {
-        emit failed(QStringLiteral("Grok CLI is not installed. Install Grok, or switch the AI backend to an xAI API key."));
+        emit failed(QStringLiteral("Grok CLI is not installed. Install Grok, then run grok login."));
         return;
     }
     QString system;
@@ -315,7 +315,7 @@ void GrokClient::startCli(const Request &request)
 void GrokClient::startApi(const Request &request)
 {
     if (request.apiKey.isEmpty()) {
-        emit failed(QStringLiteral("No xAI API key. Set XAI_API_KEY, add it in Settings, or use the signed-in Grok CLI."));
+        emit failed(QStringLiteral("Grok is not signed in. Run grok login."));
         return;
     }
     QNetworkRequest req{QUrl(request.endpoint)};

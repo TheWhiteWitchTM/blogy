@@ -61,16 +61,16 @@ Same layout as Cinder: `dist/blogy` is the launcher, `dist/bin` the binary (+ `q
 - Sites in the sidebar, posts grouped by collection, newest first.
 - Markdown editor on a black page. It opens as the editor: Preview and Tools stay closed until you ask for them. The posts list on the left hides with the amber arrow at its top. That arrow stays on top of the list, and clicking it brings the list back. Escape, with a post open, asks to save, discard changes, or delete the file. Highlighting covers front matter, headings, emphasis, code, links, and Liquid tags. A fenced code block is colored for the language on its opening line. Lists continue on Enter. The top row is words, each button sized to its label: New Post, Open, Save, Publish, Post to Bluesky, Preview, Tools, and Dictate. Preview fills the text area. Tools opens the side pane and stays lit while that pane is open. The pane has three tabs: Chat, Front matter, and Publish. Settings is in the File menu. Help is in the Help menu. The format row under it is symbols: B, I, strike, lists, link, picture, an H menu (and a jump list of the headings in the post), and a code-block menu that inserts a fenced block tagged with the language. Hover a symbol for its name. Ctrl+B, Ctrl+I, Ctrl+K, Ctrl+` for bold, italic, link, code. Ctrl+1 through Ctrl+6 set the heading.
 - Spelling and Tab completion, in the LibreSky shape. After two letters a list opens under the caret and the rest of the best word is shown in grey. Tab takes it. A lowercase word the dictionary does not know is underlined once you leave it. Right-click for another spelling, or add the word. Names and code are left alone.
-- Dictate (Ctrl+Shift+D) is a toggle on the top row. Click to listen, click again to stop. It listens through the xAI speech API and writes Markdown: “heading two”, “bullet”, “bold … end bold”, “code block python”, “new paragraph”, “scratch that”, “finish the post”. “Finish the post” (also “write the post”) takes the outline in the editor and the site’s tune and writes the full post. The prompt box can change that; leave it empty to write from what is already there. Dictate uses the signed-in Grok account, or the xAI key. The microphone audio goes to xAI only while Dictate is on.
+- Dictate (Ctrl+Shift+D) is a toggle on the top row. Click to listen, click again to stop. It listens through the xAI speech API and writes Markdown: “heading two”, “bullet”, “bold … end bold”, “code block python”, “new paragraph”, “scratch that”, “finish the post”. “Finish the post” (also “write the post”) takes the outline in the editor, the site’s voice, and its Markdown style, and writes the full post. The prompt box can change that; leave it empty to write from what is already there. Dictate uses the signed-in Grok account, or the xAI key. The microphone audio goes to xAI only while Dictate is on.
 - Find (Ctrl+F) and Replace (Ctrl+H). Help (F1) is the writing guide.
 - Live preview (Ctrl+Shift+V) fills the text area, with the front matter shown as a header. Close it and the editor is back. Tools (Ctrl+J, and Ctrl+Shift+M) opens the side pane, and the same key closes it. The button stays lit on every tab. Front matter (Ctrl+M) opens that pane on the form. The Publish tab shows the repo, branch, file, and the git command.
 - Front matter form built from the post's own keys: text, yes/no, and list fields; add or remove keys. Edits go straight into the file. MDX posts use `export const metadata = { ... }`.
 - New Post (Ctrl+N): pick site and collection, type a title; the slug, file name (`2026-10-25-my-title.md`, or `my_title/page.mdx` for MDX), front matter, and future URL come from the site config.
 - Save names the file from the title, using the collection's pattern. The date already in the file name stays. A collection that lives in `_posts` is GitHub Pages' default Jekyll engine, so the name is prefixed with the date (`2026-10-25-my-title.md`) even when the pattern forgot `{date}`.
 - Publish (Ctrl+Shift+P): saves, then runs `git -C <repo> add -- <post>`, `git -C <repo> commit -m`, and `git -C <repo> push <remote> HEAD:<branch>` in the site's clone. The Publish tab shows that command, filled in from the site, before and while it runs. A rename is committed with the old path removed. Output is in the Publish tab, followed by the post URL. Your own git credentials (ssh agent, credential helper, `gh auth`) do the push; Blogy never handles a GitHub token. `GIT_TERMINAL_PROMPT=0` keeps git from hanging on a prompt.
-- Each site can have a signature in Settings. Publish appends it to the end of the post, once. Each site also has a tune: the voice Grok uses on every request for that site, including Finish the post.
+- Settings is five tabs. Sites is the repo, the layout, and the tags. Markdown is the signature, the default heading, bold and italic, lists, and style notes. Publish appends the signature once. AI is Grok and the voice for the selected site. Bluesky is the handle and the app password. Editor is the font and link fixing.
 - After a publish: Post to Bluesky? The dialog is prefilled with the title and URL, counts graphemes against the 300 limit, and adds a link card. Also under File → Post to Bluesky (Ctrl+Shift+B).
-- Chat (inside Tools, Ctrl+J): a Grok chat that sees the post. Type in the prompt at the bottom (a large field; Ctrl+Enter sends). Finish the post reads the draft, uses the site tune, and streams the file into the editor. Leave the prompt empty to write from what is already there, or type how to change it. Other jobs: polish selection, front matter, title + tags, Bluesky blurb. A question stays in the chat; Apply to editor puts that reply in the post. The site's tune is sent with every request.
+- Chat (inside Tools, Ctrl+J): a Grok chat that sees the post. Type in the prompt and press **Ask** (or Ctrl+Enter) for a free question. Finish the post, Polish, Front matter, Title + tags, and Bluesky blurb are the set jobs. Text already in the box is part of that job; leave the box empty and the job uses the draft alone. While a job is running the other buttons wait. Finish the post streams the file into the editor. A question stays in the chat; Apply to editor puts that reply in the post. The site's voice, Markdown style, layout, and tag list are sent with every request.
 
 ## Config
 
@@ -92,9 +92,16 @@ Same layout as Cinder: `dist/blogy` is the launcher, `dist/bin` the binary (+ `q
       "slugSeparator": "-",
       "commitMessage": "Post: {title}",
       "signature": "— Your name\nhttps://username.github.io",
+      "headingLevel": 2,
+      "emphasis": "**",
+      "listMarker": "-",
+      "style": "short paragraphs, sentence-case headings",
       "collections": [
         { "name": "posts", "dir": "_posts", "file": "{date}-{slug}.md", "url": "/{year}/{month}/{day}/{slug}.html" }
       ],
+      "layout": "post",
+      "layouts": ["post", "default"],
+      "tags": ["tech", "notes"],
       "frontMatter": { "layout": "post", "title": "", "date": "{date}", "description": "", "tags": [] },
       "template": "## {title}\n\n"
     }
@@ -105,9 +112,13 @@ Same layout as Cinder: `dist/blogy` is the launcher, `dist/bin` the binary (+ `q
 - `type`: `jekyll` (YAML between `---`) or `mdx` (`export const metadata`).
 - `url`: the public base URL including `baseurl`, e.g. `https://thewhitewitchtm.github.io/whitewitch`.
 - `collections[].dir` is relative to the clone. For Jekyll collections with `collections_dir: collections` that is `collections/_blog`. `file` and `url` take `{date} {year} {month} {day} {slug} {category}` (`{category}` is the collection name). Jekyll's default collection URL is `/<collection>/<file name>.html`; `_posts` defaults to `/{year}/{month}/{day}/{slug}.html` without categories. Match your `permalink:` if you set one.
-- `collections[].frontMatter` adds keys for one collection (e.g. `video` for videos).
-- `signature`: Markdown appended to the post on publish. Set it in Settings, one signature per site. Empty means nothing is added.
-- Sites can be edited in Settings (one JSON block per site, plus the signature box) or in the file.
+- `layout` is the Jekyll layout new posts use. `layouts` is every layout found in `_layouts` and in the posts, with the chosen one first. GitHub Pages looks up `_layouts/<layout>.html`. An MDX site leaves these out. A folder with no `_layouts` and no `layout:` in the posts uses `post`, which is what GitHub Pages' default theme expects. If the posts already share a layout, that one is stored instead of a guess.
+- `tags` is the list the site already uses, most common first. New posts and Grok prefer it. It is not pasted onto every new post. The post's own tags still live in `frontMatter`.
+- Point Settings → Read from folder at a blog and Blogy fills the layout, the tag list, the collections, and the front matter from the files. A Jekyll collection, `_posts`, or `blog/<name>/page.mdx` is enough.
+- `collections[].frontMatter` adds keys for one collection (e.g. `video` for videos, `featured` for a collection that uses it).
+- `signature`: Markdown appended to the post on publish. Set it under Settings → Markdown, one signature per site. Empty means nothing is added.
+- `headingLevel` is the heading new sections use, from 1 to 6. The title stays in the front matter, so most posts use 2 (`##`). When the site template is only a heading line, new posts use this level. Leave it out and Blogy reads the level from that template (`##` is 2, `####` is 4). `emphasis` is `**` or `__`. `listMarker` is `-`, `*`, or `+`. `style` is any other note for Grok (paragraph length, spelling, what to leave out). Grok follows this on every request. `tune` is the voice, set on the AI tab.
+- Sites can be edited in Settings (JSON, layout, and tags on Sites; signature and style on Markdown; voice on AI) or in the file.
 
 ### Secrets
 

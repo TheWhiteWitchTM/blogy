@@ -22,7 +22,7 @@ QLabel#wordmark {
     color: #ffb454;
 }
 
-QLabel#tagline, QLabel#hint, QLabel#muted {
+QLabel#tagline, QLabel#hint, QLabel#muted, QLabel#layoutHint {
     color: #8a8a8a;
 }
 
@@ -478,7 +478,18 @@ QPlainTextEdit#chatLog, QTextBrowser#chatLog, QPlainTextEdit#gitLog {
     selection-background-color: #3a2a14;
 }
 
-QPlainTextEdit#chatInput, QPlainTextEdit#rawFront, QPlainTextEdit#postText, QPlainTextEdit#jsonEdit {
+QScrollArea#settingsScroll, QScrollArea#settingsScroll QWidget {
+    background: transparent;
+    border: none;
+}
+
+QWidget#settingsFooter {
+    background: #000000;
+    border-top: 1px solid #242424;
+}
+
+QPlainTextEdit#chatInput, QPlainTextEdit#rawFront, QPlainTextEdit#postText, QPlainTextEdit#jsonEdit,
+QPlainTextEdit#siteTune, QPlainTextEdit#siteSignature, QPlainTextEdit#markdownStyle {
     background: #0a0a0a;
     color: #e8e6e3;
     border: 1px solid #2a2a2a;

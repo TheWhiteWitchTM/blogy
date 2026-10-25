@@ -238,13 +238,13 @@ void MainWindow::buildUi()
     side_->addTab(chat_, QStringLiteral("Chat"));
     side_->addTab(front_, QStringLiteral("Front matter"));
     side_->addTab(publish_, QStringLiteral("Publish"));
-    side_->setTabToolTip(0, QStringLiteral("Ask Grok about this post. Finish the post writes the full article from the outline."));
+    side_->setTabToolTip(0, QStringLiteral("Ask is a free question. Finish, Polish, and the other buttons use a note in the box when you typed one."));
     side_->setTabToolTip(1, QStringLiteral("The fields at the top of the post."));
     side_->setTabToolTip(2, QStringLiteral("The git command for this site, and its output."));
     side_->setDocumentMode(true);
     side_->tabBar()->setExpanding(true);
-    side_->tabBar()->setUsesScrollButtons(false);
-    side_->tabBar()->setElideMode(Qt::ElideNone);
+    side_->tabBar()->setUsesScrollButtons(true);
+    side_->tabBar()->setElideMode(Qt::ElideRight);
     side_->setMinimumHeight(0);
     side_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
     side_->setCurrentWidget(chat_);
@@ -1491,9 +1491,17 @@ QString MainWindow::siteContext() const
         cols << c.name;
     QString text = QStringLiteral("Site: %1 (%2, %3). Collections: %4. Default front matter keys: %5.")
                        .arg(s.name, s.type, s.url, cols.join(QStringLiteral(", ")), s.frontMatter.keys().join(QStringLiteral(", ")));
+    if (!s.isMdx() && !s.layout.isEmpty())
+        text += QStringLiteral("\nLayout for posts: %1. Keep that layout in the front matter.").arg(s.layout);
+    if (!s.layouts.isEmpty())
+        text += QStringLiteral("\nLayouts in this repo: %1.").arg(s.layouts.join(QStringLiteral(", ")));
+    if (!s.tags.isEmpty())
+        text += QStringLiteral("\nTags this site already uses: %1. Prefer these. Add a new tag only when none of them fit.")
+                    .arg(s.tags.join(QStringLiteral(", ")));
     const QString tune = s.tune.trimmed();
     if (!tune.isEmpty())
         text += QStringLiteral("\nVoice for this site: %1. Write in that voice.").arg(tune);
+    text += QStringLiteral("\n") + s.writingGuide();
     return text;
 }
 

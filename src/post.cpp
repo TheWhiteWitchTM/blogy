@@ -276,6 +276,8 @@ FrontMatter defaultFrontMatter(const Site &site, const Collection &c, const QStr
             f.second = expand(f.second.toString(), date, QString(), c.name, title);
     }
     fm.set(QStringLiteral("title"), title);
+    if (!site.isMdx() && !site.layout.isEmpty())
+        fm.set(QStringLiteral("layout"), site.layout);
     if (!site.isMdx() && !fm.contains(QStringLiteral("date")))
         fm.set(QStringLiteral("date"), date.toString(QStringLiteral("yyyy-MM-dd")));
     return ordered(fm);
@@ -289,7 +291,7 @@ QString newPostText(const Site &site, const Collection &c, const QString &title,
         fm.set(QStringLiteral("tags"), tags);
     if (!description.isEmpty() || fm.contains(QStringLiteral("description")))
         fm.set(QStringLiteral("description"), description);
-    QString body = site.templateText.isEmpty() ? QStringLiteral("## {title}\n\n") : site.templateText;
+    QString body = Site::isStockHeadingTemplate(site.templateText) ? site.headingTemplate() : site.templateText;
     body = expand(body, date, QString(), c.name, title);
     return fm.compose(body, site.isMdx());
 }

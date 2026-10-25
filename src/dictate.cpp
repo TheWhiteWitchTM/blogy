@@ -614,7 +614,7 @@ void DictateController::start(const QString &apiKey)
         return;
     apiKey_ = apiKey.trimmed();
     if (apiKey_.isEmpty()) {
-        emit failed(QStringLiteral("Dictation needs a Grok sign-in or an xAI key. Sign in with Grok, or add a key in Settings."));
+        emit failed(QStringLiteral("Dictation needs a Grok sign-in. Run grok login."));
         emit listeningChanged(false);
         return;
     }

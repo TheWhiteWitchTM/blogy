@@ -27,16 +27,34 @@ struct Site {
     QString templateText;
     QString signature; // appended to the post on publish
     QString tune;      // voice for Talk to AI, added to every request for this site
+    // How Grok writes Markdown for this site. headingLevel is 1–6.
+    // A template that is only a heading line is kept in step with headingLevel.
+    int headingLevel = 2;
+    QString emphasis = QStringLiteral("**"); // "**" or "__"
+    QString listMarker = QStringLiteral("-"); // "-", "*", or "+"
+    QString styleNotes;
     // Filename beside the post. {stem} {slug} {date} {ext} {n}. Default names the picture after the post.
     QString imagePattern = QStringLiteral("{stem}{ext}");
     bool autoFixLinks = true;
     bool hasAutoFix = false; // true when the site JSON set autoFixLinks itself
+    // Jekyll / GitHub Pages layout new posts use. Empty for MDX.
+    QString layout;
+    QStringList layouts; // names found in _layouts and in the posts
+    QStringList tags;    // tags the site already uses, newest posts first by frequency
     QJsonObject frontMatter;
     QList<Collection> collections;
 
     bool isMdx() const { return type == QLatin1String("mdx"); }
     QString root() const; // path with ~ expanded
     const Collection *collection(const QString &name) const;
+
+    // 0 when the template does not start with a heading. Otherwise 1–6.
+    static int leadingHeadingLevel(const QString &templateText);
+    // Empty, or a single "{title}" heading line. New posts replace that with headingLevel.
+    static bool isStockHeadingTemplate(const QString &templateText);
+    QString headingTemplate() const;
+    // Instructions added to every Grok request for this site.
+    QString writingGuide() const;
 
     static Site fromJson(const QJsonObject &obj);
     QJsonObject toJson() const;

@@ -73,7 +73,7 @@ private:
     QPushButton *post_ = nullptr;
 };
 
-// Sites, Grok, Bluesky, and editor settings. Saves to the local config file.
+// Sites, Markdown, Grok, Bluesky, and editor settings. Saves to the local config file.
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
@@ -89,14 +89,18 @@ private:
     int currentRow_ = -1;
     QListWidget *siteList_ = nullptr;
     QPlainTextEdit *siteJson_ = nullptr;
+    QComboBox *layoutBox_ = nullptr;
+    QLineEdit *tagsEdit_ = nullptr;
+    QLabel *layoutHint_ = nullptr;
+    QLabel *markdownSite_ = nullptr;
     QPlainTextEdit *signature_ = nullptr;
+    QComboBox *heading_ = nullptr;
+    QComboBox *emphasis_ = nullptr;
+    QComboBox *listMarker_ = nullptr;
+    QPlainTextEdit *styleNotes_ = nullptr;
+    QLabel *aiSite_ = nullptr;
     QPlainTextEdit *tune_ = nullptr;
     QLabel *siteError_ = nullptr;
-    QComboBox *grokBackend_ = nullptr;
-    QLineEdit *grokEndpoint_ = nullptr;
-    QLineEdit *grokModel_ = nullptr;
-    QLineEdit *grokCommand_ = nullptr;
-    QLineEdit *grokKey_ = nullptr;
     QLabel *grokStatus_ = nullptr;
     QLineEdit *bskyService_ = nullptr;
     QLineEdit *bskyHandle_ = nullptr;
