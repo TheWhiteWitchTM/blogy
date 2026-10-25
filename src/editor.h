@@ -3,6 +3,7 @@
 #include "dictate.h"
 #include "highlighter.h"
 
+#include <QEvent>
 #include <QPlainTextEdit>
 #include <QStringList>
 #include <QTimer>
@@ -58,6 +59,7 @@ public:
 
     bool findText(const QString &needle, bool forward, bool matchCase);
     int replaceAllText(const QString &needle, const QString &replacement, bool matchCase);
+    bool suggestVisible() const;
 
     void beginDictation();
     void endDictation();
@@ -72,6 +74,7 @@ signals:
     void finishFromOutline();
 
 protected:
+    bool event(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;

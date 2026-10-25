@@ -37,8 +37,9 @@
 #include <QNetworkAccessManager>
 #include <QPlainTextEdit>
 #include <QPointer>
-#include <QRegularExpression>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QResizeEvent>
 #include <QSaveFile>
 #include <QShortcut>
 #include <QShowEvent>
@@ -54,6 +55,11 @@
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
+
+namespace {
+constexpr int kFilesRail = 40;
+constexpr int kFilesToggle = 34;
+} // namespace
 
 MainWindow::MainWindow(Config *config, QWidget *parent)
     : QMainWindow(parent), config_(config)
@@ -145,13 +151,15 @@ void MainWindow::buildUi()
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
     auto *header = new QWidget(sidebar_);
+    header->setMinimumHeight(kFilesToggle + 12);
     auto *headerRow = new QHBoxLayout(header);
-    headerRow->setContentsMargins(6, 8, 8, 4);
+    headerRow->setContentsMargins(kFilesToggle + 12, 8, 8, 4);
     headerRow->setSpacing(6);
-    filesToggle_ = new QToolButton(header);
+    // The arrow is a sibling of the splitter, raised over the posts list, so it stays visible.
+    filesToggle_ = new QToolButton(central);
     filesToggle_->setObjectName(QStringLiteral("paneToggle"));
     filesToggle_->setText(QStringLiteral("‹"));
-    filesToggle_->setFixedSize(22, 22);
+    filesToggle_->setFixedSize(kFilesToggle, kFilesToggle);
     filesToggle_->setFocusPolicy(Qt::NoFocus);
     filesToggle_->setCursor(Qt::PointingHandCursor);
     filesToggle_->setToolTip(QStringLiteral("Hide posts"));
@@ -162,9 +170,9 @@ void MainWindow::buildUi()
     wf.setPointSize(18);
     wf.setBold(true);
     wordmark_->setFont(wf);
-    headerRow->addWidget(filesToggle_, 0, Qt::AlignVCenter);
     headerRow->addWidget(wordmark_, 1);
     outer->addWidget(header);
+    sidebar_->installEventFilter(this);
     connect(filesToggle_, &QToolButton::clicked, this, [this] { setFilesOpen(!filesOpen_); });
 
     filesBody_ = new QWidget(sidebar_);
@@ -259,6 +267,7 @@ void MainWindow::buildUi()
     split_->addWidget(sidebar_);
     split_->addWidget(page_);
     split_->addWidget(side_);
+    split_->installEventFilter(this);
     split_->setStretchFactor(0, 0);
     split_->setStretchFactor(1, 1);
     split_->setStretchFactor(2, 0);
@@ -320,10 +329,12 @@ void MainWindow::buildUi()
         findBar_->hide();
         editor_->setFocus();
     });
-    auto *closeFindKey = new QShortcut(QKeySequence(Qt::Key_Escape), findBar_);
-    closeFindKey->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(closeFindKey, &QShortcut::activated, closeFind, &QPushButton::click);
+    auto *leaveKey = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    leaveKey->setObjectName(QStringLiteral("leaveFile"));
+    leaveKey->setContext(Qt::WindowShortcut);
+    connect(leaveKey, &QShortcut::activated, this, &MainWindow::leaveFile);
     setCentralWidget(central);
+    placeFilesToggle();
 
     statusLeft_ = new QLabel(this);
     statusRight_ = new QLabel(this);
@@ -569,7 +580,32 @@ void MainWindow::showEvent(QShowEvent *event)
             preview_->setFocus();
         else
             editor_->setFocus();
+        placeFilesToggle();
     }
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    placeFilesToggle();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if ((watched == sidebar_ || watched == split_)
+        && (event->type() == QEvent::Resize || event->type() == QEvent::Show || event->type() == QEvent::LayoutRequest))
+        placeFilesToggle();
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::placeFilesToggle()
+{
+    if (!filesToggle_ || !sidebar_ || !filesToggle_->parentWidget())
+        return;
+    const QPoint top = sidebar_->mapTo(filesToggle_->parentWidget(), QPoint(0, 0));
+    const int x = filesOpen_ ? top.x() + 6 : top.x() + qMax(0, (sidebar_->width() - filesToggle_->width()) / 2);
+    filesToggle_->move(x, top.y() + 6);
+    filesToggle_->raise();
 }
 
 void MainWindow::applyPanes()
@@ -603,7 +639,7 @@ void MainWindow::applyPanes()
                 const int takeSide = qMin(need, qMax(0, side - sideFloor));
                 side -= takeSide;
                 need -= takeSide;
-                const int fileFloor = filesOpen_ ? 180 : 32;
+                const int fileFloor = filesOpen_ ? 180 : kFilesRail;
                 files -= qMin(need, qMax(0, files - fileFloor));
                 page = qMax(80, width - files - side);
             }
@@ -646,8 +682,8 @@ void MainWindow::setFilesOpen(bool open)
     }
     if (!sidebar_ || !split_)
         return;
-    sidebar_->setMinimumWidth(open ? 180 : 32);
-    sidebar_->setMaximumWidth(open ? QWIDGETSIZE_MAX : 32);
+    sidebar_->setMinimumWidth(open ? 180 : kFilesRail);
+    sidebar_->setMaximumWidth(open ? QWIDGETSIZE_MAX : kFilesRail);
     QList<int> sizes = split_->sizes();
     if (sizes.size() == 3) {
         if (!open) {
@@ -655,7 +691,7 @@ void MainWindow::setFilesOpen(bool open)
                 filesWidth_ = sizes.at(0);
                 settings_.setFilesWidth(filesWidth_);
             }
-            sizes[0] = 32;
+            sizes[0] = kFilesRail;
         } else {
             filesWidth_ = qMax(180, settings_.filesWidth());
             if (sizes.at(0) < 80)
@@ -669,6 +705,7 @@ void MainWindow::setFilesOpen(bool open)
         }
     }
     settings_.setFilesVisible(open);
+    placeFilesToggle();
 }
 
 void MainWindow::showTools(QWidget *tab)
@@ -950,6 +987,104 @@ bool MainWindow::maybeSave()
     if (answer == QMessageBox::Save)
         return save();
     return answer == QMessageBox::Discard;
+}
+
+void MainWindow::closeDocument()
+{
+    if (dictateAct_ && dictateAct_->isChecked())
+        dictateAct_->setChecked(false);
+    path_.clear();
+    publishPath_.clear();
+    syncing_ = true;
+    editor_->setPlainText(QString());
+    syncing_ = false;
+    editor_->document()->setModified(false);
+    syncFormFromEditor();
+    refreshPreview();
+    updateTitle();
+    updateStatus();
+    editor_->setFocus();
+}
+
+bool MainWindow::deleteCurrentFile()
+{
+    const QString current = QDir::cleanPath(path_);
+    if (current.isEmpty() || !QFileInfo::exists(current))
+        return false;
+    const QString name = QFileInfo(current).fileName();
+    if (!QFile::remove(current)) {
+        QMessageBox::warning(this, QStringLiteral("Delete"), QStringLiteral("Could not delete %1.").arg(name));
+        return false;
+    }
+    const Site *site = siteForPath(current);
+    QString rel;
+    const Collection *collection = site ? post::collectionFor(*site, current, &rel) : nullptr;
+    QString slug;
+    if (site && collection)
+        post::parsePath(*site, *collection, rel, nullptr, &slug);
+    const QString parent = QFileInfo(current).absolutePath();
+    if (!slug.isEmpty() && QFileInfo(parent).fileName() == slug && QDir(parent).isEmpty())
+        QDir().rmdir(parent);
+    settings_.clearPendingRename(current);
+    if (QDir::cleanPath(settings_.lastFile()) == current)
+        settings_.setLastFile(QString());
+    closeDocument();
+    refreshPosts();
+    note(QStringLiteral("Deleted %1").arg(name));
+    return true;
+}
+
+void MainWindow::leaveFile()
+{
+    if (editor_ && editor_->suggestVisible())
+        return;
+    if (findBar_ && findBar_->isVisible()) {
+        findBar_->hide();
+        editor_->setFocus();
+        return;
+    }
+    if (path_.isEmpty() || !QFileInfo::exists(path_)) {
+        if (editor_->document()->isModified() && !maybeSave())
+            return;
+        if (!path_.isEmpty() || editor_->document()->isModified())
+            closeDocument();
+        return;
+    }
+
+    const QString name = QFileInfo(path_).fileName();
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("Leave this post"));
+    box.setIcon(QMessageBox::Question);
+    box.setText(QStringLiteral("Save, discard changes, or delete %1?").arg(name));
+    box.setInformativeText(QStringLiteral("Discard keeps the file and drops edits that are not saved. Delete removes the file."));
+    auto *saveBtn = box.addButton(QStringLiteral("Save"), QMessageBox::AcceptRole);
+    auto *discardBtn = box.addButton(QStringLiteral("Discard changes"), QMessageBox::ActionRole);
+    auto *deleteBtn = box.addButton(QStringLiteral("Delete file"), QMessageBox::DestructiveRole);
+    auto *cancelBtn = box.addButton(QStringLiteral("Cancel"), QMessageBox::RejectRole);
+    box.setDefaultButton(qobject_cast<QPushButton *>(saveBtn));
+    box.setEscapeButton(qobject_cast<QPushButton *>(cancelBtn));
+    saveBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background: #ffb454; color: #1a1206; border: 1px solid #ffb454;"
+        " border-radius: 8px; padding: 6px 14px; font-weight: 600; }"
+        "QPushButton:hover { background: #ffd18a; border-color: #ffd18a; }"));
+    deleteBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { background: #3a1414; color: #ffd0c8; border: 1px solid #a84848;"
+        " border-radius: 8px; padding: 6px 14px; font-weight: 600; }"
+        "QPushButton:hover { background: #4a1c1c; border-color: #ffd0c8; }"));
+    box.exec();
+    if (box.clickedButton() == saveBtn) {
+        if (save())
+            closeDocument();
+        return;
+    }
+    if (box.clickedButton() == discardBtn) {
+        editor_->document()->setModified(false);
+        closeDocument();
+        note(QStringLiteral("Discarded changes to %1").arg(name));
+        return;
+    }
+    if (box.clickedButton() == deleteBtn)
+        deleteCurrentFile();
 }
 
 void MainWindow::newPost()

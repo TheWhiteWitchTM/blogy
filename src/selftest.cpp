@@ -20,6 +20,7 @@
 #include "ui/mainwindow.h"
 #include "words.h"
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
 #include <QLabel>
@@ -27,6 +28,7 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QDateTime>
 #include <QDialog>
@@ -606,12 +608,32 @@ int runSelfTest()
                       "tools opens on the chat");
             }
             if (filesToggle && sidebar) {
-                check(filesToggle->text() == QStringLiteral("‹") && window.postTree()->isVisible(), "posts arrow collapses");
+                const auto onSidebar = [&](QWidget *widget) {
+                    return sidebar->mapFromGlobal(widget->mapToGlobal(QPoint(0, 0)));
+                };
+                QWidget *host = filesToggle->parentWidget();
+                const QPoint onSide = onSidebar(filesToggle);
+                QWidget *top = host ? host->childAt(filesToggle->geometry().center()) : nullptr;
+                check(filesToggle->text() == QStringLiteral("‹") && window.postTree()->isVisible()
+                          && filesToggle->width() >= 32 && filesToggle->height() >= 32,
+                      "posts arrow collapses",
+                      QString::number(filesToggle->width()) + QLatin1Char('x') + QString::number(filesToggle->height()));
+                check(filesToggle->isVisible() && onSide.y() >= 0 && onSide.y() <= 12 && onSide.x() >= 0
+                          && onSide.x() < sidebar->width() && top == filesToggle,
+                      "posts arrow stays on top",
+                      QString::number(onSide.x()) + QLatin1Char(',') + QString::number(onSide.y())
+                          + QStringLiteral(" top ") + (top ? top->objectName() : QStringLiteral("none")));
                 filesToggle->click();
                 QApplication::processEvents();
                 check(filesToggle->isVisible() && filesToggle->text() == QStringLiteral("›") && sidebar->width() <= 40
                           && !window.postTree()->isVisible(),
                       "posts list hides", QString::number(sidebar->width()));
+                const QPoint collapsed = onSidebar(filesToggle);
+                check(collapsed.y() <= 12 && collapsed.x() >= 0 && collapsed.x() + filesToggle->width() <= sidebar->width() + 1
+                          && host && host->childAt(filesToggle->geometry().center()) == filesToggle,
+                      "posts arrow stays on top when hidden",
+                      QString::number(collapsed.x()) + QLatin1Char(',') + QString::number(collapsed.y())
+                          + QStringLiteral(" rail ") + QString::number(sidebar->width()));
                 filesToggle->click();
                 QApplication::processEvents();
                 check(filesToggle->text() == QStringLiteral("‹") && sidebar->width() >= 180 && window.postTree()->isVisible(),
@@ -636,6 +658,41 @@ int runSelfTest()
         } else {
             check(false, "help action");
         }
+
+        const QString crap = root + QStringLiteral("/collections/_blog/2026-10-20-crap.md");
+        const QString original = QStringLiteral("---\ntitle: \"Crap\"\ndate: 2026-10-20\n---\n\nnope\n");
+        writeFile(crap, original);
+        check(window.openFile(crap), "open a post to leave");
+        window.editor()->insertPlainText(QStringLiteral("junk"));
+        const auto clickLeave = [](const QString &label) {
+            for (QWidget *widget : QApplication::allWidgets()) {
+                auto *box = qobject_cast<QMessageBox *>(widget);
+                if (!box || !box->isVisible())
+                    continue;
+                for (QAbstractButton *button : box->buttons()) {
+                    if (button->text().contains(label)) {
+                        button->click();
+                        return;
+                    }
+                }
+            }
+        };
+        QTimer::singleShot(0, [&clickLeave] { clickLeave(QStringLiteral("Cancel")); });
+        window.leaveFile();
+        check(QFileInfo::exists(crap) && window.currentPath() == QFileInfo(crap).absoluteFilePath()
+                  && window.editor()->toPlainText().contains(QLatin1String("junk")),
+              "escape cancel stays in the file");
+        QTimer::singleShot(0, [&clickLeave] { clickLeave(QStringLiteral("Discard")); });
+        window.leaveFile();
+        QFile kept(crap);
+        const bool keptOpen = kept.open(QIODevice::ReadOnly);
+        check(keptOpen && QFileInfo::exists(crap) && QString::fromUtf8(kept.readAll()) == original
+                  && window.currentPath().isEmpty(),
+              "escape discard keeps the file");
+        check(window.openFile(crap), "reopen the kept file");
+        QTimer::singleShot(0, [&clickLeave] { clickLeave(QStringLiteral("Delete")); });
+        window.leaveFile();
+        check(!QFileInfo::exists(crap) && window.currentPath().isEmpty(), "escape delete removes the file");
 
         window.editor()->document()->setModified(false);
         window.close();

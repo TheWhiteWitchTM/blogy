@@ -3,7 +3,9 @@
 #include "config.h"
 #include "settings.h"
 
+#include <QEvent>
 #include <QMainWindow>
+#include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
 
@@ -44,16 +46,23 @@ public:
 
     // Publish state, exposed for --self-test.
     QString postUrl(const QString &path) const;
+    // Escape while a post is open. Exposed for --self-test.
+    void leaveFile();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void buildUi();
     void buildMenus();
     void applyPanes();
     void setFilesOpen(bool open);
+    void placeFilesToggle();
+    void closeDocument();
+    bool deleteCurrentFile();
     void showTools(QWidget *tab);
     void refreshSites();
     void refreshPosts();

@@ -395,6 +395,23 @@ int MarkdownEdit::wordCount() const
     return toPlainText().split(ws, Qt::SkipEmptyParts).size();
 }
 
+bool MarkdownEdit::suggestVisible() const
+{
+    return suggest_ && suggest_->isVisible();
+}
+
+bool MarkdownEdit::event(QEvent *event)
+{
+    if (event->type() == QEvent::ShortcutOverride) {
+        const auto *key = static_cast<const QKeyEvent *>(event);
+        if (key->key() == Qt::Key_Escape && key->modifiers() == Qt::NoModifier && suggestVisible()) {
+            event->accept();
+            return true;
+        }
+    }
+    return QPlainTextEdit::event(event);
+}
+
 void MarkdownEdit::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Tab && suggest_->isVisible() && event->modifiers() == Qt::NoModifier) {
