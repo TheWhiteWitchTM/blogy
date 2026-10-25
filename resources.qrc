@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="style.qss">resources/blogy.qss</file>
+        <file alias="icon.svg">resources/blogy.svg</file>
+        <file alias="icon-512.png">resources/blogy-512.png</file>
+        <file alias="config.example.json">config.example.json</file>
+    </qresource>
+</RCC>

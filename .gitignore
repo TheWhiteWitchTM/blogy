@@ -1,0 +1,17 @@
+build/
+dist/
+*.o
+moc_*
+ui_*
+qrc_*
+*.user
+.qmake.stash
+Makefile
+object_script.*
+.qm
+*.app
+# Local config and secrets never go in the repo.
+config.json
+config.local.json
+*.local.json
+.env

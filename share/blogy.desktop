@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Blogy
+GenericName=Blog Editor
+Comment=A black Markdown editor for GitHub Pages blogs
+Exec=blogy %F
+Icon=blogy
+Terminal=false
+Type=Application
+Categories=Office;TextEditor;Utility;
+MimeType=text/markdown;text/x-markdown;
+StartupWMClass=blogy
+Keywords=markdown;blog;jekyll;github;pages;bluesky;editor;

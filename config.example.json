@@ -1,0 +1,89 @@
+{
+    "version": 1,
+    "editor": {
+        "fontSize": 13,
+        "wrap": true,
+        "previewDelayMs": 250
+    },
+    "grok": {
+        "endpoint": "https://api.x.ai/v1/chat/completions",
+        "model": "grok-4",
+        "apiKey": ""
+    },
+    "bluesky": {
+        "service": "https://bsky.social",
+        "handle": "",
+        "appPassword": ""
+    },
+    "sites": [
+        {
+            "name": "The White Witch (whitewitch)",
+            "type": "jekyll",
+            "path": "~/Projects/whitewitch",
+            "branch": "main",
+            "remote": "origin",
+            "url": "https://thewhitewitchtm.github.io/whitewitch",
+            "slugSeparator": "-",
+            "commitMessage": "Post: {title}",
+            "collections": [
+                { "name": "blog",     "dir": "collections/_blog",     "file": "{date}-{slug}.md", "url": "/blog/{date}-{slug}.html" },
+                { "name": "articles", "dir": "collections/_articles", "file": "{date}-{slug}.md", "url": "/articles/{date}-{slug}.html" },
+                { "name": "shorts",   "dir": "collections/_shorts",   "file": "{date}-{slug}.md", "url": "/shorts/{date}-{slug}.html" },
+                { "name": "rants",    "dir": "collections/_rants",    "file": "{date}-{slug}.md", "url": "/rants/{date}-{slug}.html" },
+                { "name": "videos",   "dir": "collections/_videos",   "file": "{date}-{slug}.md", "url": "/videos/{date}-{slug}.html",
+                  "frontMatter": { "video": "" } },
+                { "name": "about",    "dir": "collections/_about",    "file": "{date}-{slug}.md", "url": "/about/{date}-{slug}.html" }
+            ],
+            "frontMatter": {
+                "layout": "default",
+                "title": "",
+                "date": "{date}",
+                "featured": false,
+                "description": "",
+                "tags": []
+            },
+            "template": "## {title}\n\n"
+        },
+        {
+            "name": "Mira's World (mira, Next.js MDX)",
+            "type": "mdx",
+            "path": "~/Projects/mira",
+            "branch": "main",
+            "remote": "origin",
+            "url": "https://thewhitewitchtm.github.io/mira",
+            "slugSeparator": "_",
+            "commitMessage": "Blog: {title}",
+            "collections": [
+                { "name": "dev-blog",    "dir": "blog/dev-blog",    "file": "{slug}/page.mdx", "url": "/blog/dev-blog/{slug}" },
+                { "name": "ai_talk",     "dir": "blog/ai_talk",     "file": "{slug}/page.mdx", "url": "/blog/ai_talk/{slug}" },
+                { "name": "miras_world", "dir": "blog/miras_world", "file": "{slug}/page.mdx", "url": "/blog/miras_world/{slug}" },
+                { "name": "emoji-ui",    "dir": "blog/emoji-ui",    "file": "{slug}/page.mdx", "url": "/blog/emoji-ui/{slug}" }
+            ],
+            "frontMatter": {
+                "title": ""
+            },
+            "template": "#### {title}\n\n"
+        },
+        {
+            "name": "TheWhiteWitchTM.github.io",
+            "type": "jekyll",
+            "path": "~/Projects/TheWhiteWitchTM.github.io",
+            "branch": "main",
+            "remote": "origin",
+            "url": "https://thewhitewitchtm.github.io",
+            "slugSeparator": "-",
+            "commitMessage": "Post: {title}",
+            "collections": [
+                { "name": "posts", "dir": "_posts", "file": "{date}-{slug}.md", "url": "/{year}/{month}/{day}/{slug}.html" }
+            ],
+            "frontMatter": {
+                "layout": "default",
+                "title": "",
+                "date": "{date}",
+                "description": "",
+                "tags": []
+            },
+            "template": "## {title}\n\n"
+        }
+    ]
+}

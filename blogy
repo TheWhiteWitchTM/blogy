@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run Blogy from the source tree: the bundled dist/ when it exists, else build/.
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -x "$HERE/dist/blogy" ]; then
+    exec "$HERE/dist/blogy" "$@"
+fi
+if [ ! -x "$HERE/build/blogy" ]; then
+    "$HERE/scripts/build.sh" >&2 || exit 1
+fi
+exec "$HERE/build/blogy" "$@"
