@@ -1,7 +1,10 @@
 #include "post.h"
 
+#include "bluesky.h"
+
 #include <QDir>
 #include <QRegularExpression>
+#include <QTextBoundaryFinder>
 
 namespace post {
 
@@ -47,24 +50,31 @@ QString expand(const QString &pattern, const QDate &date, const QString &slug,
     return s;
 }
 
-QString relativePath(const Collection &c, const QDate &date, const QString &slug)
+namespace {
+
+// GitHub Pages' built-in Jekyll engine ignores a file in _posts unless the
+// name starts with YYYY-MM-DD-. Custom collections (and MDX trees) do not.
+bool needsDatePrefix(const Site &site, const Collection &c)
 {
-    const QString file = expand(c.filePattern, date, slug, c.name);
-    return c.dir.isEmpty() ? file : c.dir + QLatin1Char('/') + file;
+    if (site.isMdx())
+        return false;
+    const QString dir = QDir::cleanPath(c.dir);
+    return dir == QLatin1String("_posts") || dir.endsWith(QLatin1String("/_posts"));
 }
 
-bool parsePath(const Collection &c, const QString &relative, QDate *date, QString *slug)
+bool parsePattern(const QString &pattern, const QString &dir, const QString &relative, QDate *date, QString *slug)
 {
     QString file = relative;
-    if (!c.dir.isEmpty() && file.startsWith(c.dir + QLatin1Char('/')))
-        file = file.mid(c.dir.size() + 1);
-    QString re = QRegularExpression::escape(c.filePattern);
+    if (!dir.isEmpty() && file.startsWith(dir + QLatin1Char('/')))
+        file = file.mid(dir.size() + 1);
+    QString re = QRegularExpression::escape(pattern);
     re.replace(QStringLiteral("\\{date\\}"), QStringLiteral("(?<date>\\d{4}-\\d{2}-\\d{2})"));
     re.replace(QStringLiteral("\\{year\\}"), QStringLiteral("(?<year>\\d{4})"));
     re.replace(QStringLiteral("\\{month\\}"), QStringLiteral("(?<month>\\d{2})"));
     re.replace(QStringLiteral("\\{day\\}"), QStringLiteral("(?<day>\\d{2})"));
     re.replace(QStringLiteral("\\{slug\\}"), QStringLiteral("(?<slug>[^/]+?)"));
     re.replace(QStringLiteral("\\{category\\}"), QStringLiteral("[^/]+"));
+    re.replace(QStringLiteral("\\{collection\\}"), QStringLiteral("[^/]+"));
     const QRegularExpression rx(QLatin1Char('^') + re + QLatin1Char('$'));
     const auto m = rx.match(file);
     if (!m.hasMatch())
@@ -79,6 +89,148 @@ bool parsePath(const Collection &c, const QString &relative, QDate *date, QStrin
                           m.captured(QStringLiteral("day")).toInt());
     }
     return true;
+}
+
+} // namespace
+
+QString effectiveFilePattern(const Site &site, const Collection &c)
+{
+    const QString pattern = c.filePattern.isEmpty() ? QStringLiteral("{date}-{slug}.md") : c.filePattern;
+    if (pattern.contains(QLatin1String("{date}")) || pattern.contains(QLatin1String("{year}")))
+        return pattern;
+    if (!needsDatePrefix(site, c))
+        return pattern;
+    const int slash = pattern.lastIndexOf(QLatin1Char('/'));
+    const QString head = slash >= 0 ? pattern.left(slash + 1) : QString();
+    const QString tail = slash >= 0 ? pattern.mid(slash + 1) : pattern;
+    return head + QStringLiteral("{date}-") + tail;
+}
+
+QString relativePath(const Collection &c, const QDate &date, const QString &slug)
+{
+    const QString file = expand(c.filePattern, date, slug, c.name);
+    return c.dir.isEmpty() ? file : c.dir + QLatin1Char('/') + file;
+}
+
+QString relativePath(const Site &site, const Collection &c, const QDate &date, const QString &slug)
+{
+    const QString file = expand(effectiveFilePattern(site, c), date, slug, c.name);
+    return c.dir.isEmpty() ? file : c.dir + QLatin1Char('/') + file;
+}
+
+bool parsePath(const Collection &c, const QString &relative, QDate *date, QString *slug)
+{
+    return parsePattern(c.filePattern, c.dir, relative, date, slug);
+}
+
+bool parsePath(const Site &site, const Collection &c, const QString &relative, QDate *date, QString *slug)
+{
+    const QString effective = effectiveFilePattern(site, c);
+    if (parsePattern(effective, c.dir, relative, date, slug))
+        return true;
+    if (effective != c.filePattern)
+        return parsePattern(c.filePattern, c.dir, relative, date, slug);
+    return false;
+}
+
+QString withSignature(const QString &text, const QString &signature)
+{
+    const QString sig = signature.trimmed();
+    if (sig.isEmpty())
+        return text;
+    QString end = text;
+    while (!end.isEmpty() && (end.endsWith(QLatin1Char('\n')) || end.endsWith(QLatin1Char('\r'))
+                              || end.endsWith(QLatin1Char(' ')) || end.endsWith(QLatin1Char('\t'))))
+        end.chop(1);
+    if (end.endsWith(sig))
+        return text;
+    QString out = text;
+    if (!out.endsWith(QLatin1Char('\n')))
+        out += QLatin1Char('\n');
+    if (!out.endsWith(QStringLiteral("\n\n")))
+        out += QLatin1Char('\n');
+    out += sig;
+    if (!out.endsWith(QLatin1Char('\n')))
+        out += QLatin1Char('\n');
+    return out;
+}
+
+QString plainSentence(const QString &in)
+{
+    QString s = in;
+    s.replace(QRegularExpression(QStringLiteral(R"(!?\[[^\]]*\]\([^)]*\))")), QString());
+    s.remove(QRegularExpression(QStringLiteral("[*_`~>#]")));
+    s.replace(QRegularExpression(QStringLiteral("\\s+")), QStringLiteral(" "));
+    return s.trimmed();
+}
+
+QString takeGraphemes(const QString &text, int count)
+{
+    if (count <= 0 || text.isEmpty())
+        return {};
+    QTextBoundaryFinder finder(QTextBoundaryFinder::Grapheme, text);
+    int end = 0;
+    for (int i = 0; i < count; ++i) {
+        const int next = finder.toNextBoundary();
+        if (next < 0)
+            return text;
+        end = next;
+    }
+    return text.left(end);
+}
+
+QString excerpt(const QString &markdown)
+{
+    QString body;
+    const FrontMatter fm = FrontMatter::parse(markdown, &body);
+    const QString desc = fm.string(QStringLiteral("description")).trimmed();
+    if (!desc.isEmpty())
+        return desc;
+    QString para;
+    const QStringList lines = body.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        const QString trimmed = line.trimmed();
+        if (trimmed.isEmpty()) {
+            if (!para.isEmpty())
+                break;
+            continue;
+        }
+        if (trimmed.startsWith(QLatin1Char('#')) || trimmed.startsWith(QLatin1String("```"))
+            || trimmed.startsWith(QLatin1String("~~~")) || trimmed == QLatin1String("---")
+            || trimmed.startsWith(QLatin1String("export ")))
+            continue;
+        QString piece = trimmed;
+        if (piece.startsWith(QLatin1String("> ")))
+            piece = piece.mid(2);
+        if (!para.isEmpty())
+            para += QLatin1Char(' ');
+        para += piece;
+    }
+    return plainSentence(para);
+}
+
+QString blueskyAnnouncement(const QString &leadIn, const QString &url, int limit)
+{
+    const QString link = url.trimmed();
+    QString lead = leadIn.trimmed();
+    lead.replace(QRegularExpression(QStringLiteral("\\s+")), QStringLiteral(" "));
+    if (link.isEmpty()) {
+        if (BlueskyClient::graphemeLength(lead) <= limit)
+            return lead;
+        return takeGraphemes(lead, qMax(1, limit - 1)).trimmed() + QStringLiteral("…");
+    }
+    if (lead.isEmpty())
+        return link;
+    const QString full = lead + QStringLiteral("\n\n") + link;
+    if (BlueskyClient::graphemeLength(full) <= limit)
+        return full;
+    const int room = limit - BlueskyClient::graphemeLength(link) - 2;
+    if (room <= 1)
+        return link;
+    QString cut = takeGraphemes(lead, room - 1).trimmed();
+    while (!cut.isEmpty() && QStringLiteral(".,;: ").contains(cut.back()))
+        cut.chop(1);
+    return cut + QStringLiteral("…\n\n") + link;
 }
 
 QString publicUrl(const Site &site, const Collection &c, const QDate &date, const QString &slug)

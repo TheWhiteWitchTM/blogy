@@ -25,6 +25,12 @@ struct Site {
     QString slugSeparator = QStringLiteral("-");
     QString commitMessage = QStringLiteral("Post: {title}");
     QString templateText;
+    QString signature; // appended to the post on publish
+    QString tune;      // voice for Talk to AI, added to every request for this site
+    // Filename beside the post. {stem} {slug} {date} {ext} {n}. Default names the picture after the post.
+    QString imagePattern = QStringLiteral("{stem}{ext}");
+    bool autoFixLinks = true;
+    bool hasAutoFix = false; // true when the site JSON set autoFixLinks itself
     QJsonObject frontMatter;
     QList<Collection> collections;
 
@@ -37,11 +43,17 @@ struct Site {
 };
 
 // Everything Blogy keeps between runs that matters: sites and secrets.
-// Lives in ~/.config/blogy/config.json (QStandardPaths), never in a repo.
+// Lives in ~/.config/blogy/config.json, never inside a git repo.
 // Environment variables win over the file for secrets.
 class Config {
 public:
+    // ~/.config/blogy, ignoring BLOGY_CONFIG. Window state sits next to the config.
+    static QString configDir();
+    // ~/.config/blogy/config.json. BLOGY_CONFIG wins unless that path is inside a git repo.
     static QString defaultPath();
+    static QString userConfigPath();
+    // True when path (or a parent) is a git work tree. Config must not be saved there.
+    static bool isInsideGitWorkTree(const QString &path);
     QString path() const { return path_; }
 
     bool load(const QString &path = QString(), QString *error = nullptr);
@@ -54,10 +66,21 @@ public:
     int fontSize = 13;
     bool wrap = true;
     int previewDelayMs = 250;
+    // On publish, copy attached pictures next to the post and rewrite links to the public URL.
+    bool autoFixLinks = true;
 
+    // "auto" uses the signed-in Grok CLI when it is installed, otherwise the API key.
+    QString grokBackend = QStringLiteral("auto");
+    QString grokCommand;
     QString grokEndpoint = QStringLiteral("https://api.x.ai/v1/chat/completions");
-    QString grokModel = QStringLiteral("grok-4");
+    QString grokModel = QStringLiteral("grok-4.7");
     QString bskyService = QStringLiteral("https://bsky.social");
+
+    QString grokCommandResolved() const;
+    bool grokCliAvailable() const;
+    bool grokUsesCli() const;
+    QString grokModelResolved() const;
+    bool fixesLinks(const Site &site) const;
 
     // Values stored in the file. Use the resolved getters to read effective values.
     QString fileGrokKey;

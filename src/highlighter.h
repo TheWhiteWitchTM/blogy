@@ -15,6 +15,8 @@ protected:
     void highlightBlock(const QString &text) override;
 
 private:
+    void paintCode(const QString &text, int lang, bool &inComment);
+
     struct Rule {
         QRegularExpression pattern;
         QTextCharFormat format;
@@ -22,4 +24,5 @@ private:
     };
     QList<Rule> rules_;
     QTextCharFormat heading_, front_, frontKey_, fence_, code_, quote_;
+    QTextCharFormat keyword_, string_, comment_, number_;
 };

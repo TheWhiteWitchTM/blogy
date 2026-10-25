@@ -8,13 +8,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network WebSockets)
 
 file(GLOB_RECURSE BLOGY_SOURCES CONFIGURE_DEPENDS src/*.cpp src/*.h)
 add_executable(blogy ${BLOGY_SOURCES} resources.qrc)
 target_include_directories(blogy PRIVATE src)
 target_compile_options(blogy PRIVATE -Wall -Wextra -Wno-unused-parameter)
-target_link_libraries(blogy PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
+target_link_libraries(blogy PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::WebSockets)
 
 # dist/bin/blogy finds dist/lib first, then the Qt it was built with.
 set_target_properties(blogy PROPERTIES

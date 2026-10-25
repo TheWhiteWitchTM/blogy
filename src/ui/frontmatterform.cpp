@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -28,11 +29,11 @@ FrontMatterForm::FrontMatterForm(QWidget *parent)
     : QWidget(parent)
 {
     setObjectName(QStringLiteral("frontPane"));
+    setMinimumSize(0, 0);
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     auto *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(10, 10, 10, 10);
-    auto *label = new QLabel(QStringLiteral("Front matter"), this);
-    label->setObjectName(QStringLiteral("section"));
-    outer->addWidget(label);
+    outer->setContentsMargins(10, 8, 10, 8);
+    outer->setSpacing(6);
     auto *hint = new QLabel(QStringLiteral("Lists are comma separated. Changes go straight into the post."), this);
     hint->setObjectName(QStringLiteral("hint"));
     hint->setWordWrap(true);

@@ -1,0 +1,70 @@
+<h1>Blogy</h1>
+<p>A black page for a Markdown post. Write in the middle. Preview and Tools stay closed until you open them.</p>
+
+<h2>The rows</h2>
+<p>The top row is words. Each button is as wide as its label: New Post, Open, Save, Publish, Post to Bluesky, Preview, Tools, and Dictate. Preview fills the text area. Tools opens the side pane, and stays lit while that pane is open. The pane has three tabs: Chat, Front matter, and Publish. Publish on the top row is the amber one. Settings is in the File menu. Help is this page, in the Help menu.</p>
+<p>The arrow at the top of the posts list hides that list. The arrow stays put, and clicking it brings the list back.</p>
+<p>The row under that formats the post, the same kind of symbols as a word processor. <b>B</b>, <b>I</b>, and the struck <b>ab</b> wrap the selection, or the word you are about to type. Click the same one again to take the marks off.</p>
+<p><b>Heading</b> is the H. It opens the six levels. Pick the same level again and the line becomes a paragraph. Under the levels, the menu lists the headings already in this post. Click one to jump there. Ctrl+1 through Ctrl+6 do the same from the keyboard.</p>
+<p><b>Bullets</b>, <b>Numbers</b>, and <b>Tasks</b> mark the lines you have selected. Enter continues the list. Enter on an empty item ends it.</p>
+<p>The <b>code block</b> symbol opens a language list. The post gets a fenced block, the kind that starts with three backticks and the language name, so the published page can color it. Paste the code between the fences. The editor colors keywords, strings, comments, and numbers while you are still here. If the cursor is already inside a block, choosing a language only changes the tag on the opening line.</p>
+<p><b>Image</b> asks for a picture. Publish copies it next to the post. You can also drop a picture on the page. <b>Emoji</b> and <b>Flags</b> search by name. In the text, <span style="color:#7fd962">:smile:</span> and <span style="color:#7fd962">:flag-at:</span> expand when you type the closing colon.</p>
+
+<h2>Spelling and Tab</h2>
+<p>After a couple of letters, a short list opens under the cursor and the rest of the word sits in grey in front of the caret. Press <b>Tab</b> to take the first one. Click any row to take that one instead. Escape puts the list away. Enter still makes a new line.</p>
+<p>The list is the same idea as LibreSky. Learned words and names already in the post come first, then the dictionary, shortest match first. A word you have not finished is not marked wrong while it can still grow into a real word.</p>
+<p>A lowercase word the dictionary does not know gets a red underline once you leave it. Names and words that start with a capital are left alone. Code, front matter, and web addresses are left alone too. Right-click a wavy word for other spellings, or choose <b>Add to dictionary</b>. Added words are remembered on this machine.</p>
+
+<h2>Dictation</h2>
+<p><b>Dictate</b> (Ctrl+Shift+D) is a toggle, the last word on the top row. Click it to listen. Click it again to stop. Holding it down does nothing. It writes Markdown, not a flat transcript. It uses the signed-in Grok account, or the xAI key from Settings. While it is on, the microphone audio is sent to xAI and nowhere else. The button stays lit.</p>
+<p>Talk in phrases. A pause commits the phrase. The amber text at the caret is what was just heard and has not been committed yet. Say <b>finish the post</b> and Blogy takes the outline already in the editor, plus the site’s tune, and writes the full post. “Write the post” and “complete the post” do the same. A note in the prompt box changes the result. Leave that box empty and the post is written from what is already there.</p>
+<table>
+<tr><td>heading two the market</td><td>a second-level heading, “The market”</td></tr>
+<tr><td>heading one</td><td>through heading six</td></tr>
+<tr><td>new paragraph</td><td>a blank line</td></tr>
+<tr><td>new line</td><td>the next line</td></tr>
+<tr><td>bullet milk</td><td>a bulleted line</td></tr>
+<tr><td>numbered list</td><td>the next number</td></tr>
+<tr><td>task list</td><td>a checkbox</td></tr>
+<tr><td>block quote</td><td>a quote line</td></tr>
+<tr><td>bold quiet end bold</td><td>quiet in bold</td></tr>
+<tr><td>italic, strike</td><td>the same, with end italic or end strike</td></tr>
+<tr><td>inline code main end code</td><td>main in backticks</td></tr>
+<tr><td>code block python</td><td>opens a Python fence</td></tr>
+<tr><td>end code</td><td>closes the fence or the inline code</td></tr>
+<tr><td>horizontal rule</td><td>a divider</td></tr>
+<tr><td>period, comma, question mark</td><td>the mark, stuck to the word</td></tr>
+<tr><td>open quote, close quote</td><td>curly quotes</td></tr>
+<tr><td>open paren, close paren</td><td>and the same for brackets and braces</td></tr>
+<tr><td>scratch that</td><td>drops the last phrase</td></tr>
+<tr><td>finish the post</td><td>writes the full post from the outline, in the site’s voice</td></tr>
+<tr><td>cap, all caps, no caps</td><td>the next word</td></tr>
+</table>
+<p>Inside a code fence, words are written as you say them. New line, punctuation, and end code still work. Say scratch that to take back the last committed phrase.</p>
+
+<h2>Find</h2>
+<p>Ctrl+F opens Find under the post. Enter jumps to the next match. Shift+Enter jumps back. Ctrl+H is Replace. All replaces every match in one step, so one undo brings them back.</p>
+
+<h2>The rest of the window</h2>
+<p><b>Preview</b> (Ctrl+Shift+V) fills the text area. The editor comes back when you close it. <b>Tools</b> (Ctrl+J) opens the side pane and stays lit while it is open, on any tab. The same key closes it. The tabs are <b>Chat</b>, <b>Front matter</b>, and <b>Publish</b>. Front matter (Ctrl+M) opens the pane on the form. Edits there go straight into the file. The prompt at the bottom of the chat changes what Grok writes. <b>Finish the post</b> reads the draft that is open, uses the site’s tune, and writes the full post into the editor. Leave the prompt empty to finish from what is already there, or type how to change it. A question stays in the chat until you apply it. The prompt fills the width under the chat, and Send is on the row beneath it. Ctrl+Enter sends too.</p>
+<p><b>Save</b> names the file from the title. <b>Publish</b> (Ctrl+Shift+P) saves, commits, and pushes the post in that site’s repo. The Publish tab shows the repo, the branch, and the git command, then runs it. A site can append a signature once. After a publish, Blogy can post the title and the link to Bluesky (Ctrl+Shift+B).</p>
+<p>The row under the words is symbols. Hover one for its name.</p>
+
+<h2>Keys</h2>
+<table>
+<tr><td>Ctrl+B, Ctrl+I</td><td>bold, italic</td></tr>
+<tr><td>Ctrl+Shift+X</td><td>strike</td></tr>
+<tr><td>Ctrl+`</td><td>inline code</td></tr>
+<tr><td>Ctrl+Shift+`</td><td>code block</td></tr>
+<tr><td>Ctrl+K</td><td>link</td></tr>
+<tr><td>Ctrl+Shift+I</td><td>image</td></tr>
+<tr><td>Ctrl+1 … Ctrl+6</td><td>heading</td></tr>
+<tr><td>Ctrl+F, Ctrl+H</td><td>find, replace</td></tr>
+<tr><td>Ctrl+Shift+D</td><td>dictate</td></tr>
+<tr><td>Ctrl+Shift+E, Ctrl+Shift+F</td><td>emoji, flags</td></tr>
+<tr><td>Ctrl+Shift+V</td><td>preview</td></tr>
+<tr><td>Ctrl+J, Ctrl+Shift+M</td><td>Tools</td></tr>
+<tr><td>Ctrl+M</td><td>front matter</td></tr>
+<tr><td>Ctrl+Shift+P, Ctrl+Shift+B</td><td>publish, Bluesky</td></tr>
+<tr><td>F1</td><td>this page</td></tr>
+</table>

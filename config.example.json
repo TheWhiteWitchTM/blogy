@@ -3,11 +3,13 @@
     "editor": {
         "fontSize": 13,
         "wrap": true,
-        "previewDelayMs": 250
+        "previewDelayMs": 250,
+        "autoFixLinks": true
     },
     "grok": {
+        "backend": "auto",
         "endpoint": "https://api.x.ai/v1/chat/completions",
-        "model": "grok-4",
+        "model": "grok-4.7",
         "apiKey": ""
     },
     "bluesky": {
@@ -42,7 +44,8 @@
                 "description": "",
                 "tags": []
             },
-            "template": "## {title}\n\n"
+            "template": "## {title}\n\n",
+            "tune": "dark humor and sarcasm"
         },
         {
             "name": "Mira's World (mira, Next.js MDX)",
@@ -62,7 +65,8 @@
             "frontMatter": {
                 "title": ""
             },
-            "template": "#### {title}\n\n"
+            "template": "#### {title}\n\n",
+            "tune": "dark humor and sarcasm"
         },
         {
             "name": "TheWhiteWitchTM.github.io",
@@ -83,7 +87,8 @@
                 "description": "",
                 "tags": []
             },
-            "template": "## {title}\n\n"
+            "template": "## {title}\n\n",
+            "tune": "dark humor and sarcasm"
         }
     ]
 }

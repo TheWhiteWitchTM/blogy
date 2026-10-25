@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -34,6 +35,15 @@ Site Site::fromJson(const QJsonObject &obj)
     s.slugSeparator = obj.value(QStringLiteral("slugSeparator")).toString(QStringLiteral("-"));
     s.commitMessage = obj.value(QStringLiteral("commitMessage")).toString(QStringLiteral("Post: {title}"));
     s.templateText = obj.value(QStringLiteral("template")).toString();
+    s.signature = obj.value(QStringLiteral("signature")).toString();
+    s.tune = obj.value(QStringLiteral("tune")).toString();
+    s.imagePattern = obj.value(QStringLiteral("imagePattern")).toString(QStringLiteral("{stem}{ext}"));
+    if (s.imagePattern.trimmed().isEmpty())
+        s.imagePattern = QStringLiteral("{stem}{ext}");
+    if (obj.contains(QStringLiteral("autoFixLinks"))) {
+        s.autoFixLinks = obj.value(QStringLiteral("autoFixLinks")).toBool(true);
+        s.hasAutoFix = true;
+    }
     s.frontMatter = obj.value(QStringLiteral("frontMatter")).toObject();
     const QJsonArray cols = obj.value(QStringLiteral("collections")).toArray();
     for (const QJsonValue &v : cols) {
@@ -69,6 +79,14 @@ QJsonObject Site::toJson() const
     obj.insert(QStringLiteral("slugSeparator"), slugSeparator);
     obj.insert(QStringLiteral("commitMessage"), commitMessage);
     obj.insert(QStringLiteral("template"), templateText);
+    if (!signature.trimmed().isEmpty())
+        obj.insert(QStringLiteral("signature"), signature);
+    if (!tune.trimmed().isEmpty())
+        obj.insert(QStringLiteral("tune"), tune);
+    if (!imagePattern.isEmpty())
+        obj.insert(QStringLiteral("imagePattern"), imagePattern);
+    if (hasAutoFix)
+        obj.insert(QStringLiteral("autoFixLinks"), autoFixLinks);
     obj.insert(QStringLiteral("frontMatter"), frontMatter);
     QJsonArray cols;
     for (const Collection &c : collections) {
@@ -94,15 +112,46 @@ QString Config::expandHome(const QString &path)
     return path;
 }
 
+QString Config::configDir()
+{
+    return QFileInfo(userConfigPath()).absolutePath();
+}
+
+QString Config::userConfigPath()
+{
+    // GenericConfigLocation + /blogy is the plain ~/.config/blogy the README promises.
+    // AppConfigLocation would nest another blogy/ under the organization name.
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    return base + QStringLiteral("/blogy/config.json");
+}
+
+bool Config::isInsideGitWorkTree(const QString &path)
+{
+    if (path.trimmed().isEmpty())
+        return false;
+    const QFileInfo info(path);
+    QDir dir = info.isDir() ? QDir(info.absoluteFilePath()) : info.absoluteDir();
+    for (int i = 0; i < 64; ++i) {
+        if (QFileInfo::exists(dir.filePath(QStringLiteral(".git"))))
+            return true;
+        const QString here = dir.absolutePath();
+        if (!dir.cdUp() || dir.absolutePath() == here)
+            return false;
+    }
+    return false;
+}
+
 QString Config::defaultPath()
 {
     const QByteArray env = qgetenv("BLOGY_CONFIG");
-    if (!env.isEmpty())
-        return expandHome(QString::fromLocal8Bit(env));
-    // AppConfigLocation is ~/.config/<org>/<app>; GenericConfigLocation + /blogy
-    // gives the plain ~/.config/blogy the README promises.
-    const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-    return base + QStringLiteral("/blogy/config.json");
+    if (!env.isEmpty()) {
+        const QString chosen = expandHome(QString::fromLocal8Bit(env));
+        if (!isInsideGitWorkTree(chosen))
+            return chosen;
+        qWarning().noquote() << QStringLiteral("Blogy: %1 is inside a git repository; using %2")
+                                    .arg(chosen, userConfigPath());
+    }
+    return userConfigPath();
 }
 
 QJsonObject exampleConfig()
@@ -151,6 +200,12 @@ bool Config::load(const QString &path, QString *error)
 bool Config::save(QString *error) const
 {
     const QString target = path_.isEmpty() ? defaultPath() : path_;
+    if (isInsideGitWorkTree(target)) {
+        if (error)
+            *error = QStringLiteral("Refusing to write %1 inside a git repository. Blogy keeps config in %2.")
+                         .arg(QFileInfo(target).absoluteFilePath(), userConfigPath());
+        return false;
+    }
     QDir().mkpath(QFileInfo(target).absolutePath());
     QSaveFile file(target);
     if (!file.open(QIODevice::WriteOnly)) {
@@ -175,10 +230,15 @@ void Config::fromJson(const QJsonObject &root)
     fontSize = editor.value(QStringLiteral("fontSize")).toInt(13);
     wrap = editor.value(QStringLiteral("wrap")).toBool(true);
     previewDelayMs = editor.value(QStringLiteral("previewDelayMs")).toInt(250);
+    autoFixLinks = editor.contains(QStringLiteral("autoFixLinks")) ? editor.value(QStringLiteral("autoFixLinks")).toBool(true) : true;
 
     const QJsonObject grok = root.value(QStringLiteral("grok")).toObject();
+    grokBackend = grok.value(QStringLiteral("backend")).toString(QStringLiteral("auto"));
+    if (grokBackend != QLatin1String("cli") && grokBackend != QLatin1String("api") && grokBackend != QLatin1String("auto"))
+        grokBackend = QStringLiteral("auto");
+    grokCommand = grok.value(QStringLiteral("command")).toString();
     grokEndpoint = grok.value(QStringLiteral("endpoint")).toString(QStringLiteral("https://api.x.ai/v1/chat/completions"));
-    grokModel = grok.value(QStringLiteral("model")).toString(QStringLiteral("grok-4"));
+    grokModel = grok.value(QStringLiteral("model")).toString(QStringLiteral("grok-4.7"));
     fileGrokKey = grok.value(QStringLiteral("apiKey")).toString();
 
     const QJsonObject bsky = root.value(QStringLiteral("bluesky")).toObject();
@@ -200,9 +260,13 @@ QJsonObject Config::toJson() const
     editor.insert(QStringLiteral("fontSize"), fontSize);
     editor.insert(QStringLiteral("wrap"), wrap);
     editor.insert(QStringLiteral("previewDelayMs"), previewDelayMs);
+    editor.insert(QStringLiteral("autoFixLinks"), autoFixLinks);
     root.insert(QStringLiteral("editor"), editor);
 
     QJsonObject grok;
+    grok.insert(QStringLiteral("backend"), grokBackend);
+    if (!grokCommand.isEmpty())
+        grok.insert(QStringLiteral("command"), grokCommand);
     grok.insert(QStringLiteral("endpoint"), grokEndpoint);
     grok.insert(QStringLiteral("model"), grokModel);
     grok.insert(QStringLiteral("apiKey"), fileGrokKey);
@@ -228,6 +292,49 @@ QString envOr(const char *name, const QString &fallback)
     return v.isEmpty() ? fallback : QString::fromUtf8(v).trimmed();
 }
 } // namespace
+
+QString Config::grokCommandResolved() const
+{
+    if (!grokCommand.trimmed().isEmpty())
+        return expandHome(grokCommand.trimmed());
+    const QString bundled = QDir::homePath() + QStringLiteral("/.grok/bin/grok");
+    if (QFileInfo(bundled).isExecutable())
+        return bundled;
+    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("grok"));
+    return onPath;
+}
+
+bool Config::grokCliAvailable() const
+{
+    const QString command = grokCommandResolved();
+    if (command.isEmpty() || !QFileInfo(command).isExecutable())
+        return false;
+    return QFileInfo(QDir::homePath() + QStringLiteral("/.grok/auth.json")).isReadable();
+}
+
+bool Config::grokUsesCli() const
+{
+    if (grokBackend == QLatin1String("api"))
+        return false;
+    if (grokBackend == QLatin1String("cli"))
+        return true;
+    return grokCliAvailable();
+}
+
+QString Config::grokModelResolved() const
+{
+    if (grokModel.trimmed().isEmpty())
+        return QStringLiteral("grok-4.7");
+    // The old default is an API name. The signed-in CLI lists grok-4.7.
+    if (grokUsesCli() && grokModel == QLatin1String("grok-4"))
+        return QStringLiteral("grok-4.7");
+    return grokModel;
+}
+
+bool Config::fixesLinks(const Site &site) const
+{
+    return site.hasAutoFix ? site.autoFixLinks : autoFixLinks;
+}
 
 QString Config::grokApiKey() const { return envOr("XAI_API_KEY", fileGrokKey); }
 QString Config::bskyHandle() const { return envOr("BLUESKY_HANDLE", fileBskyHandle); }

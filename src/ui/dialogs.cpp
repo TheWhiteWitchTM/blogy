@@ -1,6 +1,7 @@
 #include "ui/dialogs.h"
 
 #include "bluesky.h"
+#include "detect.h"
 #include "post.h"
 
 #include <QCheckBox>
@@ -107,7 +108,7 @@ QString NewPostDialog::absolutePath() const
     const Collection *c = s.collection(collectionName());
     if (!c)
         return {};
-    return s.root() + QLatin1Char('/') + post::relativePath(*c, date(), slug().isEmpty() ? QStringLiteral("untitled") : slug());
+    return s.root() + QLatin1Char('/') + post::relativePath(s, *c, date(), slug().isEmpty() ? QStringLiteral("untitled") : slug());
 }
 
 void NewPostDialog::refreshCollections()
@@ -246,15 +247,19 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
     left->addWidget(siteList_, 1);
     auto *addSite = new QPushButton(QStringLiteral("Add"), sitesTab);
     auto *dupSite = new QPushButton(QStringLiteral("Duplicate"), sitesTab);
+    auto *detectSites = new QPushButton(QStringLiteral("Detect GitHub repos"), sitesTab);
+    detectSites->setToolTip(QStringLiteral("Look through ~/Projects for GitHub clones and offer the ones that look like blogs."));
     auto *delSite = new QPushButton(QStringLiteral("Remove"), sitesTab);
     left->addWidget(addSite);
     left->addWidget(dupSite);
+    left->addWidget(detectSites);
     left->addWidget(delSite);
     sh->addLayout(left, 1);
     auto *right = new QVBoxLayout;
     auto *help = new QLabel(QStringLiteral(
         "One site as JSON. type is \"jekyll\" (YAML front matter) or \"mdx\" (export const metadata). "
-        "Patterns take {date} {year} {month} {day} {slug} {category}. url is the public base URL, baseurl included."), sitesTab);
+        "Patterns take {date} {year} {month} {day} {slug} {category}. url is the public base URL, baseurl included. "
+        "Posts in _posts get a date prefix on save, because that is what GitHub Pages' default Jekyll engine publishes."), sitesTab);
     help->setObjectName(QStringLiteral("hint"));
     help->setWordWrap(true);
     right->addWidget(help);
@@ -265,6 +270,30 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
     siteError_ = new QLabel(sitesTab);
     siteError_->setObjectName(QStringLiteral("muted"));
     right->addWidget(siteError_);
+    auto *sigLabel = new QLabel(QStringLiteral("Signature"), sitesTab);
+    sigLabel->setObjectName(QStringLiteral("section"));
+    right->addWidget(sigLabel);
+    auto *sigHint = new QLabel(QStringLiteral("Added to the end of the post when you publish this site. A later publish does not add it twice."), sitesTab);
+    sigHint->setObjectName(QStringLiteral("hint"));
+    sigHint->setWordWrap(true);
+    right->addWidget(sigHint);
+    signature_ = new QPlainTextEdit(sitesTab);
+    signature_->setObjectName(QStringLiteral("jsonEdit"));
+    signature_->setPlaceholderText(QStringLiteral("— Your name\nhttps://yoursite.example"));
+    signature_->setFixedHeight(72);
+    right->addWidget(signature_);
+    auto *tuneLabel = new QLabel(QStringLiteral("Tune"), sitesTab);
+    tuneLabel->setObjectName(QStringLiteral("section"));
+    right->addWidget(tuneLabel);
+    auto *tuneHint = new QLabel(QStringLiteral("How this site should sound. Finish the post, and every other Grok request, uses it."), sitesTab);
+    tuneHint->setObjectName(QStringLiteral("hint"));
+    tuneHint->setWordWrap(true);
+    right->addWidget(tuneHint);
+    tune_ = new QPlainTextEdit(sitesTab);
+    tune_->setObjectName(QStringLiteral("siteTune"));
+    tune_->setPlaceholderText(QStringLiteral("dark humor and sarcasm"));
+    tune_->setFixedHeight(64);
+    right->addWidget(tune_);
     sh->addLayout(right, 3);
     tabs->addTab(sitesTab, QStringLiteral("Sites"));
 
@@ -300,6 +329,63 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
         siteList_->addItem(s.name);
         siteList_->setCurrentRow(sites_.size() - 1);
     });
+    connect(detectSites, &QPushButton::clicked, this, [this] {
+        if (currentRow_ >= 0 && !storeSite(currentRow_))
+            return;
+        const QList<FoundRepo> found = scanGitHubRepos(QDir::homePath() + QStringLiteral("/Projects"));
+        if (found.isEmpty()) {
+            QMessageBox::information(this, QStringLiteral("Detect GitHub repos"),
+                                     QStringLiteral("No GitHub clones under ~/Projects."));
+            return;
+        }
+        QDialog pick(this);
+        pick.setWindowTitle(QStringLiteral("GitHub repos"));
+        pick.resize(640, 420);
+        auto *layout = new QVBoxLayout(&pick);
+        auto *hint = new QLabel(QStringLiteral("Blogs are checked. Other GitHub repos are listed so you can add one anyway."), &pick);
+        hint->setObjectName(QStringLiteral("hint"));
+        hint->setWordWrap(true);
+        layout->addWidget(hint);
+        auto *list = new QListWidget(&pick);
+        for (int repoIndex = 0; repoIndex < found.size(); ++repoIndex) {
+            const FoundRepo &repo = found.at(repoIndex);
+            const QString root = Config::expandHome(repo.site.path);
+            bool already = false;
+            for (const Site &have : sites_) {
+                if (QDir::cleanPath(Config::expandHome(have.path)) == QDir::cleanPath(root))
+                    already = true;
+            }
+            auto *item = new QListWidgetItem(QStringLiteral("%1\n%2\n%3 — %4")
+                                                 .arg(repo.site.name, repo.site.path, repo.site.url, repo.detail),
+                                             list);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(!already && repo.blog ? Qt::Checked : Qt::Unchecked);
+            if (already) {
+                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+                item->setText(item->text() + QStringLiteral("\nAlready in Blogy"));
+            }
+            item->setData(Qt::UserRole + 1, repoIndex);
+        }
+        layout->addWidget(list, 1);
+        auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &pick);
+        layout->addWidget(box);
+        connect(box, &QDialogButtonBox::accepted, &pick, &QDialog::accept);
+        connect(box, &QDialogButtonBox::rejected, &pick, &QDialog::reject);
+        if (pick.exec() != QDialog::Accepted)
+            return;
+        for (int i = 0; i < list->count(); ++i) {
+            QListWidgetItem *item = list->item(i);
+            if (item->checkState() != Qt::Checked || !(item->flags() & Qt::ItemIsEnabled))
+                continue;
+            const int index = item->data(Qt::UserRole + 1).toInt();
+            if (index < 0 || index >= found.size())
+                continue;
+            sites_.append(found.at(index).site);
+            siteList_->addItem(found.at(index).site.name);
+        }
+        if (!sites_.isEmpty())
+            siteList_->setCurrentRow(sites_.size() - 1);
+    });
     connect(delSite, &QPushButton::clicked, this, [this] {
         const int row = siteList_->currentRow();
         if (row < 0)
@@ -318,8 +404,16 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
                    ? QStringLiteral("%1 is set in the environment and wins over this field.").arg(QString::fromLatin1(var))
                    : QStringLiteral("Or set %1 in the environment.").arg(QString::fromLatin1(var));
     };
+    grokBackend_ = new QComboBox(accounts);
+    grokBackend_->addItem(QStringLiteral("Auto — Grok CLI if you are signed in"), QStringLiteral("auto"));
+    grokBackend_->addItem(QStringLiteral("Grok CLI (grok build, already signed in)"), QStringLiteral("cli"));
+    grokBackend_->addItem(QStringLiteral("xAI API key"), QStringLiteral("api"));
+    const int backendRow = grokBackend_->findData(config_->grokBackend);
+    grokBackend_->setCurrentIndex(backendRow < 0 ? 0 : backendRow);
     grokEndpoint_ = new QLineEdit(config_->grokEndpoint, accounts);
     grokModel_ = new QLineEdit(config_->grokModel, accounts);
+    grokCommand_ = new QLineEdit(config_->grokCommand, accounts);
+    grokCommand_->setPlaceholderText(QStringLiteral("Blank uses ~/.grok/bin/grok"));
     grokKey_ = new QLineEdit(config_->fileGrokKey, accounts);
     grokKey_->setEchoMode(QLineEdit::Password);
     grokKey_->setPlaceholderText(envNote(QStringLiteral("grok"), "XAI_API_KEY"));
@@ -329,12 +423,33 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
     bskyPassword_ = new QLineEdit(config_->fileBskyPassword, accounts);
     bskyPassword_->setEchoMode(QLineEdit::Password);
     bskyPassword_->setPlaceholderText(envNote(QStringLiteral("password"), "BLUESKY_APP_PASSWORD"));
-    auto *grokLabel = new QLabel(QStringLiteral("Grok (xAI)"), accounts);
+    auto *grokLabel = new QLabel(QStringLiteral("Grok"), accounts);
     grokLabel->setObjectName(QStringLiteral("section"));
     af->addRow(grokLabel);
-    af->addRow(QStringLiteral("Endpoint"), grokEndpoint_);
+    grokStatus_ = new QLabel(accounts);
+    grokStatus_->setObjectName(QStringLiteral("hint"));
+    grokStatus_->setWordWrap(true);
+    af->addRow(grokStatus_);
+    af->addRow(QStringLiteral("Backend"), grokBackend_);
     af->addRow(QStringLiteral("Model"), grokModel_);
+    af->addRow(QStringLiteral("CLI path"), grokCommand_);
+    af->addRow(QStringLiteral("API endpoint"), grokEndpoint_);
     af->addRow(QStringLiteral("API key"), grokKey_);
+    auto refreshGrok = [this] {
+        const QString backend = grokBackend_->currentData().toString();
+        const bool cli = config_->grokCliAvailable();
+        if (backend == QLatin1String("api"))
+            grokStatus_->setText(QStringLiteral("Grok calls the xAI endpoint with the API key. Dictate uses that key."));
+        else if (cli)
+            grokStatus_->setText(QStringLiteral("Signed in with Grok. Writing uses %1, model %2. Dictate uses this sign-in.")
+                                     .arg(config_->grokCommandResolved(), grokModel_->text().trimmed().isEmpty()
+                                                                              ? QStringLiteral("grok-4.7")
+                                                                              : grokModel_->text().trimmed()));
+        else
+            grokStatus_->setText(QStringLiteral("Grok CLI is not signed in. Run grok login, or switch the backend to an API key."));
+    };
+    refreshGrok();
+    connect(grokBackend_, &QComboBox::currentIndexChanged, this, refreshGrok);
     auto *bskyLabel = new QLabel(QStringLiteral("Bluesky"), accounts);
     bskyLabel->setObjectName(QStringLiteral("section"));
     af->addRow(bskyLabel);
@@ -356,8 +471,20 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
     fontSize_->setValue(config_->fontSize);
     wrap_ = new QCheckBox(QStringLiteral("Soft wrap long lines"), editor);
     wrap_->setChecked(config_->wrap);
+    autoFix_ = new QCheckBox(QStringLiteral("Auto-fix links on publish"), editor);
+    autoFix_->setChecked(config_->autoFixLinks);
+    auto *fixHint = new QLabel(QStringLiteral(
+        "When you publish, a picture you attached (from Downloads or a drag onto the page) is copied beside the post "
+        "and named after it — 2026-10-25-hello.png, or my_slug/my_slug.png for an MDX page. "
+        "The Markdown link is rewritten to the public URL from the site config, and a copy is placed where the site serves that URL. "
+        "Links to other posts in the same site become their public URLs. A site can turn this off with \"autoFixLinks\": false."),
+                               editor);
+    fixHint->setObjectName(QStringLiteral("hint"));
+    fixHint->setWordWrap(true);
     ef->addRow(QStringLiteral("Font size"), fontSize_);
     ef->addRow(QString(), wrap_);
+    ef->addRow(QString(), autoFix_);
+    ef->addRow(fixHint);
     auto *openFolder = new QPushButton(QStringLiteral("Open config folder"), editor);
     connect(openFolder, &QPushButton::clicked, this, [this] {
         QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(config_->path()).absolutePath()));
@@ -373,6 +500,8 @@ SettingsDialog::SettingsDialog(Config *config, QWidget *parent)
 
     if (!sites_.isEmpty())
         siteList_->setCurrentRow(0);
+    if (currentRow_ < 0 && siteList_->currentRow() >= 0)
+        loadSite(siteList_->currentRow());
 }
 
 void SettingsDialog::loadSite(int row)
@@ -382,10 +511,21 @@ void SettingsDialog::loadSite(int row)
     if (row < 0 || row >= sites_.size()) {
         siteJson_->clear();
         siteJson_->setEnabled(false);
+        signature_->clear();
+        signature_->setEnabled(false);
+        tune_->clear();
+        tune_->setEnabled(false);
         return;
     }
     siteJson_->setEnabled(true);
-    siteJson_->setPlainText(QString::fromUtf8(QJsonDocument(sites_.at(row).toJson()).toJson(QJsonDocument::Indented)));
+    signature_->setEnabled(true);
+    tune_->setEnabled(true);
+    QJsonObject shown = sites_.at(row).toJson();
+    shown.remove(QStringLiteral("signature"));
+    shown.remove(QStringLiteral("tune"));
+    siteJson_->setPlainText(QString::fromUtf8(QJsonDocument(shown).toJson(QJsonDocument::Indented)));
+    signature_->setPlainText(sites_.at(row).signature);
+    tune_->setPlainText(sites_.at(row).tune);
 }
 
 bool SettingsDialog::storeSite(int row)
@@ -399,6 +539,12 @@ bool SettingsDialog::storeSite(int row)
         return false;
     }
     sites_[row] = Site::fromJson(doc.object());
+    sites_[row].signature = signature_->toPlainText();
+    if (sites_[row].signature.trimmed().isEmpty())
+        sites_[row].signature.clear();
+    sites_[row].tune = tune_->toPlainText();
+    if (sites_[row].tune.trimmed().isEmpty())
+        sites_[row].tune.clear();
     if (QListWidgetItem *item = siteList_->item(row))
         item->setText(sites_.at(row).name);
     siteError_->clear();
@@ -410,14 +556,17 @@ void SettingsDialog::accept()
     if (!storeSite(currentRow_))
         return;
     config_->sites = sites_;
+    config_->grokBackend = grokBackend_->currentData().toString();
     config_->grokEndpoint = grokEndpoint_->text().trimmed();
     config_->grokModel = grokModel_->text().trimmed();
+    config_->grokCommand = grokCommand_->text().trimmed();
     config_->fileGrokKey = grokKey_->text().trimmed();
     config_->bskyService = bskyService_->text().trimmed();
     config_->fileBskyHandle = bskyHandle_->text().trimmed().remove(QLatin1Char('@'));
     config_->fileBskyPassword = bskyPassword_->text().trimmed();
     config_->fontSize = fontSize_->value();
     config_->wrap = wrap_->isChecked();
+    config_->autoFixLinks = autoFix_->isChecked();
     QString error;
     if (!config_->save(&error)) {
         QMessageBox::warning(this, QStringLiteral("Settings"), QStringLiteral("Could not save: ") + error);

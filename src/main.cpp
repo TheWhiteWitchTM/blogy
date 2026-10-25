@@ -96,7 +96,14 @@ int main(int argc, char *argv[])
 
     Config config;
     QString error;
-    const QString path = parser.value(QStringLiteral("config"));
+    QString path = parser.value(QStringLiteral("config"));
+    if (!path.isEmpty() && Config::isInsideGitWorkTree(Config::expandHome(path))) {
+        QMessageBox::warning(nullptr, QStringLiteral("Blogy"),
+                             QStringLiteral("Refusing %1 because it is inside a git repository.\n"
+                                            "Config stays in %2, so it is not pushed.")
+                                 .arg(path, Config::userConfigPath()));
+        path.clear();
+    }
     if (!config.load(path, &error))
         QMessageBox::warning(nullptr, QStringLiteral("Blogy"),
                              QStringLiteral("Could not read %1:\n%2\n\nUsing the example sites for now.").arg(config.path(), error));

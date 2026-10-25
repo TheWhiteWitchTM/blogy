@@ -1,4 +1,4 @@
-QT += core gui widgets network
+QT += core gui widgets network websockets
 CONFIG += c++17
 INCLUDEPATH += src
 TARGET = blogy
@@ -26,11 +26,20 @@ SOURCES += \
     src/git.cpp \
     src/bluesky.cpp \
     src/grok.cpp \
+    src/grokauth.cpp \
+    src/media.cpp \
+    src/emoji.cpp \
+    src/words.cpp \
+    src/dictate.cpp \
+    src/detect.cpp \
     src/selftest.cpp \
     src/ui/frontmatterform.cpp \
     src/ui/chatpanel.cpp \
     src/ui/dialogs.cpp \
-    src/ui/mainwindow.cpp
+    src/ui/icons.cpp \
+    src/ui/formatbar.cpp \
+    src/ui/mainwindow.cpp \
+    src/ui/publishpanel.cpp
 
 HEADERS += \
     src/config.h \
@@ -43,8 +52,17 @@ HEADERS += \
     src/git.h \
     src/bluesky.h \
     src/grok.h \
+    src/grokauth.h \
+    src/media.h \
+    src/emoji.h \
+    src/words.h \
+    src/dictate.h \
+    src/detect.h \
     src/selftest.h \
     src/ui/frontmatterform.h \
     src/ui/chatpanel.h \
     src/ui/dialogs.h \
-    src/ui/mainwindow.h
+    src/ui/icons.h \
+    src/ui/formatbar.h \
+    src/ui/mainwindow.h \
+    src/ui/publishpanel.h

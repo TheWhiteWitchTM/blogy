@@ -4,5 +4,8 @@
         <file alias="icon.svg">resources/blogy.svg</file>
         <file alias="icon-512.png">resources/blogy-512.png</file>
         <file alias="config.example.json">config.example.json</file>
+        <file alias="words-en.txt">resources/words-en.txt</file>
+        <file alias="help.html">resources/help.html</file>
+        <file alias="menu-arrow.svg">resources/menu-arrow.svg</file>
     </qresource>
 </RCC>
