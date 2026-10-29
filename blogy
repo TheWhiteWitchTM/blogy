@@ -1,10 +1,27 @@
-#!/bin/sh
-# Run Blogy from the source tree: the bundled dist/ when it exists, else build/.
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-if [ -x "$HERE/dist/blogy" ]; then
-    exec "$HERE/dist/blogy" "$@"
+#!/bin/bash
+# Launch Blogy. Uses the build when Qt is installed, and dist/ when it is not.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# COSMIC Bar is offscreen and used to pass that platform to everything it
+# opened. With a real display, drop it so this editor shows a window.
+if [ "${QT_QPA_PLATFORM:-}" = "offscreen" ] && [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]; then
+    unset QT_QPA_PLATFORM
+    unset QT_ENABLE_HIGHDPI_SCALING
 fi
-if [ ! -x "$HERE/build/blogy" ]; then
-    "$HERE/scripts/build.sh" >&2 || exit 1
+BIN="$DIR/build/blogy"
+DIST="$DIR/dist/blogy"
+# A system Qt older than 6.12 still satisfies ldd. Require the symbol this build uses.
+qt_ok() {
+    local core
+    [[ -x "$1" ]] || return 1
+    core="$(ldd "$1" 2>/dev/null | awk '/libQt6Core\.so/{print $3; exit}')"
+    [[ -n "$core" && -e "$core" ]] || return 1
+    readelf -V "$core" 2>/dev/null | grep -q 'Name: Qt_6\.12'
+}
+if ! qt_ok "$BIN"; then
+    if [[ -x "$DIST" ]]; then
+        exec "$DIST" "$@"
+    fi
+    echo "Blogy is not built yet. On a machine with Qt, run scripts/build.sh" >&2
+    exit 1
 fi
-exec "$HERE/build/blogy" "$@"
+exec "$BIN" "$@"

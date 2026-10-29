@@ -12,7 +12,7 @@ scripts/build.sh
 ./blogy
 ```
 
-`./blogy` runs the bundled `dist/` copy when it exists, else `build/blogy` (building it first if needed). Pass a post to open it:
+`./blogy` runs `build/blogy` when this machine has Qt 6.12, and the bundled `dist/blogy` when it does not. Pass a post to open it:
 
 ```bash
 ./blogy ~/Projects/whitewitch/collections/_blog/2026-10-22-retro-center.md

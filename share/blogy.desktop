@@ -2,8 +2,8 @@
 Name=Blogy
 GenericName=Blog Editor
 Comment=A black Markdown editor for GitHub Pages blogs
-Exec=blogy %F
-Icon=blogy
+Exec=/home/andreas/Projects/blogy/blogy %F
+Icon=/home/andreas/Projects/blogy/resources/blogy-512.png
 Terminal=false
 Type=Application
 Categories=Office;TextEditor;Utility;
